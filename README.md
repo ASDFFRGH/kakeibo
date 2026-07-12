@@ -1,0 +1,138 @@
+# 家計簿
+
+Androidを中心に、オフラインで記録し、必要なときだけ自宅PCへ同期できる家計簿アプリです。PCではWeb画面から同じ支出・カテゴリを管理できます。
+
+## 構成
+
+- `android/`: Kotlin、Jetpack Compose、Room、Retrofit
+- `backend/`: Go REST API、PostgreSQL
+- `frontend/`: Next.js、React、TypeScript
+- `docker-compose.yml`: PostgreSQL、Backend、Frontendの一括起動
+
+## PCで起動する
+
+必要なものはDocker Desktop（Docker Compose v2対応）のみです。GoやNode.js、PostgreSQLをPCへ直接インストールする必要はありません。
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+初回起動時にDB Migrationと初期カテゴリの登録が自動実行されます。起動後は次のURLを開きます。
+
+- Web画面: http://localhost:3000
+- API: http://localhost:8080/api/v1
+- ヘルスチェック: http://localhost:8080/health
+
+バックグラウンドで起動する場合:
+
+```bash
+docker compose up --build -d
+docker compose logs -f
+```
+
+停止する場合:
+
+```bash
+docker compose down
+```
+
+DBデータも削除して完全に初期化する場合だけ、次を使います。
+
+```bash
+docker compose down -v
+```
+
+通常の停止ではPostgreSQLのデータはDocker Volumeに保持されます。ポートやDBパスワードは`.env`で変更できます。
+
+## Androidアプリを起動する
+
+Android Studio、JDK 17、Android SDK 35を使用します。Android Studioで`android/`ディレクトリを開き、Gradle Syncを実行してください。
+
+### エミュレータで起動
+
+1. PC側で`docker compose up --build`を実行します。
+2. Android StudioのDevice ManagerでAndroid 10（API 29）以上の端末を作成します。
+3. `app`構成を選び、Runを実行します。
+4. アプリ右上の同期アイコンを押します。
+
+デバッグビルドの接続先は、エミュレータからホストPCを表す次のURLです。
+
+```text
+http://10.0.2.2:8080/api/v1/
+```
+
+### Android実機で起動
+
+実機とPCを同じWi-Fiへ接続し、PCのLAN内IPアドレスを確認します。macOSでは通常、次で確認できます。
+
+```bash
+ipconfig getifaddr en0
+```
+
+例としてPCのIPが`192.168.1.20`なら、Android StudioのTerminalから次のようにビルドします。
+
+```bash
+cd android
+./gradlew installDebug -PAPI_BASE_URL=http://192.168.1.20:8080/api/v1/
+```
+
+末尾の`/`は必須です。USBデバッグを有効にした実機を接続してAndroid StudioからRunする場合は、Android StudioのGradle設定へ同じプロパティを渡すか、`android/gradle.properties`へ次を一時的に追記します。
+
+```properties
+API_BASE_URL=http://192.168.1.20:8080/api/v1/
+```
+
+PCのファイアウォールでTCP `8080`への接続が許可されていることも確認してください。実機からブラウザで`http://PCのIP:8080/health`を開き、`{"data":{"status":"ok"},"success":true}`が表示されれば接続できます。
+
+## 使い方
+
+Androidでは支出とカテゴリを端末内のRoom Databaseへ保存するため、PCが停止中でも登録・編集・削除できます。右上の同期ボタンを押したときだけPCのAPIへ接続します。
+
+Web画面で変更したデータも次回のAndroid同期で端末へ反映されます。同じデータが両方で変更された場合は、`updated_at`が新しいデータを優先し、同時刻ならサーバー側を優先します。削除は同期のため論理削除として保持されます。
+
+## 開発コマンド
+
+Dockerを使わず個別に開発するときも、PostgreSQLはDockerで起動するのが簡単です。
+
+```bash
+docker compose up -d db
+```
+
+Backend（Go 1.22以上）:
+
+```bash
+cd backend
+go mod download
+DATABASE_URL='postgres://kakeibo:kakeibo@localhost:5432/kakeibo?sslmode=disable' go run ./cmd/server
+go test ./...
+```
+
+Frontend（Node.js 20.9以上の20 LTS）:
+
+```bash
+cd frontend
+npm install
+npm run dev
+npm run build
+```
+
+Android（JDK 17、Android SDK 35）:
+
+```bash
+cd android
+./gradlew test
+./gradlew assembleDebug
+```
+
+## API概要
+
+主なエンドポイントは次の通りです。詳細は[API仕様](docs/api.md)を参照してください。
+
+- `GET/POST /api/v1/expenses`
+- `GET/PUT/DELETE /api/v1/expenses/{uuid}`
+- `GET/POST /api/v1/categories`
+- `PUT/DELETE /api/v1/categories/{uuid}`
+- `POST /api/v1/sync`
+
+認証はMVPの対象外です。LAN外へポートを公開しないでください。
