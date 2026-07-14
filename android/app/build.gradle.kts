@@ -12,8 +12,8 @@ android {
         applicationId = "jp.local.kakeibo"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
         buildConfigField("String", "API_BASE_URL", "\"${project.findProperty("API_BASE_URL") ?: "http://10.0.2.2:8080/api/v1/"}\"")
     }
     buildFeatures {
