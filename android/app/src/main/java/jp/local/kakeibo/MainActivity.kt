@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
@@ -151,6 +153,7 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
     var editingExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
     var expenseEditorOpen by remember { mutableStateOf(false) }
     var categoryEditorOpen by remember { mutableStateOf(false) }
+    var summaryOpen by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
 
     LaunchedEffect(state.message) {
@@ -162,6 +165,13 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold) },
                 actions = {
+                    IconButton(onClick = { summaryOpen = !summaryOpen }) {
+                        if (summaryOpen) {
+                            Icon(Icons.AutoMirrored.Outlined.List, "支出一覧")
+                        } else {
+                            Icon(Icons.Outlined.BarChart, "サマリー")
+                        }
+                    }
                     IconButton(onClick = { categoryEditorOpen = true }) {
                         Icon(Icons.Outlined.Settings, "カテゴリ")
                     }
@@ -172,20 +182,26 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { expenseEditorOpen = true },
-                icon = { Icon(Icons.Outlined.Add, null) },
-                text = { Text("支出を追加") },
-            )
+            if (!summaryOpen) {
+                ExtendedFloatingActionButton(
+                    onClick = { expenseEditorOpen = true },
+                    icon = { Icon(Icons.Outlined.Add, null) },
+                    text = { Text("支出を追加") },
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        ExpenseList(
-            state = state,
-            modifier = Modifier.padding(padding),
-            onEdit = { editingExpense = it },
-            onDelete = viewModel::deleteExpense,
-        )
+        if (summaryOpen) {
+            SummaryScreen(expenses = state.expenses, modifier = Modifier.padding(padding))
+        } else {
+            ExpenseList(
+                state = state,
+                modifier = Modifier.padding(padding),
+                onEdit = { editingExpense = it },
+                onDelete = viewModel::deleteExpense,
+            )
+        }
     }
 
     if (expenseEditorOpen || editingExpense != null) {

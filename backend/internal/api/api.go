@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,15 +12,21 @@ import (
 
 	"kakeibo/backend/internal/model"
 	"kakeibo/backend/internal/repository"
+	"kakeibo/backend/internal/summary"
 )
 
 type API struct {
-	repo *repository.Repository
-	cors string
+	repo        *repository.Repository
+	summaryRepo summaryExpenseRepository
+	cors        string
+}
+
+type summaryExpenseRepository interface {
+	ListExpenses(ctx context.Context, from, to, category string, includeDeleted bool) ([]model.Expense, error)
 }
 
 func New(repo *repository.Repository, cors string) http.Handler {
-	a := &API{repo: repo, cors: cors}
+	a := &API{repo: repo, summaryRepo: repo, cors: cors}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { ok(w, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/v1/categories", a.listCategories)
@@ -31,6 +38,7 @@ func New(repo *repository.Repository, cors string) http.Handler {
 	mux.HandleFunc("POST /api/v1/expenses", a.createExpense)
 	mux.HandleFunc("PUT /api/v1/expenses/{uuid}", a.updateExpense)
 	mux.HandleFunc("DELETE /api/v1/expenses/{uuid}", a.deleteExpense)
+	mux.HandleFunc("GET /api/v1/summaries", a.getSummary)
 	mux.HandleFunc("POST /api/v1/sync", a.sync)
 	return a.middleware(mux)
 }
@@ -192,6 +200,26 @@ func (a *API) deleteExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(204)
+}
+func (a *API) getSummary(w http.ResponseWriter, r *http.Request) {
+	period, anchor, err := summary.Parse(r.URL.Query().Get("period"), r.URL.Query().Get("date"))
+	if err != nil {
+		fail(w, 400, err.Error())
+		return
+	}
+	from, to := summary.Bounds(period, anchor)
+	expenses, err := a.summaryRepo.ListExpenses(
+		r.Context(),
+		from.Format("2006-01-02"),
+		to.Format("2006-01-02"),
+		"",
+		false,
+	)
+	if err != nil {
+		a.handleErr(w, err)
+		return
+	}
+	ok(w, summary.Build(period, anchor, expenses))
 }
 func (a *API) sync(w http.ResponseWriter, r *http.Request) {
 	var req model.SyncRequest

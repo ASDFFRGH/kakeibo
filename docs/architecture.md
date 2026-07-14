@@ -1,8 +1,8 @@
 # 家計簿アプリ アーキテクチャ設計書
 
-* Version: 1.0.0
-* Status: Draft
-* Last Updated: 2026-07-12
+- Version: 1.1.0
+- Status: Draft
+- Last Updated: 2026-07-14
 
 ---
 
@@ -10,12 +10,12 @@
 
 本システムは以下の思想で設計する。
 
-* Offline First
-* Layered Architecture
-* Clean Architecture
-* API First
-* Stateless Backend
-* 将来のクラウド移行を考慮した構成
+- Offline First
+- Layered Architecture
+- Clean Architecture
+- API First
+- Stateless Backend
+- 将来のクラウド移行を考慮した構成
 
 Androidアプリを中心とし、サーバーは同期およびPCからの管理画面を提供する。
 
@@ -73,10 +73,10 @@ Androidアプリを中心とし、サーバーは同期およびPCからの管�
 
 役割
 
-* 家計簿入力
-* ローカル保存
-* オフライン利用
-* 同期
+- 家計簿入力
+- ローカル保存
+- オフライン利用
+- 同期
 
 ---
 
@@ -84,10 +84,10 @@ Androidアプリを中心とし、サーバーは同期およびPCからの管�
 
 役割
 
-* REST API
-* データ同期
-* 永続化
-* Web画面へのデータ提供
+- REST API
+- データ同期
+- 永続化
+- Web画面へのデータ提供
 
 ---
 
@@ -95,9 +95,9 @@ Androidアプリを中心とし、サーバーは同期およびPCからの管�
 
 役割
 
-* データ閲覧
-* 編集
-* 管理
+- データ閲覧
+- 編集
+- 管理
 
 ---
 
@@ -137,14 +137,14 @@ REST API
 
 責務
 
-* 画面表示
-* ユーザー操作受付
+- 画面表示
+- ユーザー操作受付
 
 禁止事項
 
-* SQL
-* API呼び出し
-* ビジネスロジック
+- SQL
+- API呼び出し
+- ビジネスロジック
 
 ---
 
@@ -152,9 +152,9 @@ REST API
 
 責務
 
-* UI状態管理
-* Repository呼び出し
-* バリデーション
+- UI状態管理
+- Repository呼び出し
+- バリデーション
 
 ---
 
@@ -162,8 +162,8 @@ REST API
 
 責務
 
-* Room
-* API
+- Room
+- API
 
 両方を吸収する。
 
@@ -339,6 +339,54 @@ PostgreSQL
 
 ---
 
+## 期間サマリー
+
+Androidはオフライン利用を維持するため、Roomが返す未削除の支出を純粋な`SummaryCalculator`で集計する。
+
+```
+Room Expense Flow
+
+↓
+
+ViewModel UiState
+
+↓
+
+SummaryCalculator
+
+↓
+
+Compose SummaryScreen
+```
+
+WebはAPI Clientを経由して`GET /api/v1/summaries`を呼び出す。
+
+```
+Summary Page
+
+↓
+
+API Client
+
+↓
+
+Summary Service
+
+↓
+
+Expense Repository
+
+↓
+
+PostgreSQL
+```
+
+サマリーを永続化すると、支出更新時に集計値との整合性維持が必要になり同期競合も増えるため、専用テーブルは持たない。Androidとサーバーはそれぞれの支出データを同じ期間規則で都度集計する。
+
+DBスキーマ、Roomスキーマ、同期ペイロードは変更しない。
+
+---
+
 # 8. 同期方式
 
 本システムでは双方向同期を採用する。
@@ -353,9 +401,9 @@ PostgreSQL
 
 対象
 
-* 新規
-* 更新
-* 削除
+- 新規
+- 更新
+- 削除
 
 ---
 
@@ -469,9 +517,9 @@ UUIDはデータ作成側で生成する。
 
 これにより
 
-* 重複登録防止
-* 将来のクラウド対応
-* データ移行
+- 重複登録防止
+- 将来のクラウド対応
+- データ移行
 
 を容易にする。
 
@@ -581,9 +629,9 @@ MVPでは認証を実装しない。
 
 将来的に
 
-* JWT
-* OAuth
-* Firebase Authentication
+- JWT
+- OAuth
+- Firebase Authentication
 
 を追加可能な構成とする。
 
@@ -593,12 +641,12 @@ MVPでは認証を実装しない。
 
 Backend
 
-* Access Log
-* Error Log
+- Access Log
+- Error Log
 
 Android
 
-* Debug Log
+- Debug Log
 
 本番では個人情報をログへ出力しない。
 
@@ -608,15 +656,15 @@ Android
 
 以下を容易に追加できること。
 
-* OCR
-* AI分析
-* 自動同期
-* Push通知
-* CSV出力
-* Parquet出力
-* 家族共有
-* 銀行連携
-* クレジットカード連携
+- OCR
+- AI分析
+- 自動同期
+- Push通知
+- CSV出力
+- Parquet出力
+- 家族共有
+- 銀行連携
+- クレジットカード連携
 
 Repository・Service層を中心に拡張する。
 
@@ -624,14 +672,14 @@ Repository・Service層を中心に拡張する。
 
 # 20. アーキテクチャ原則
 
-* UIはビジネスロジックを持たない
-* DBアクセスはRepositoryのみ
-* SQLはRepositoryのみ
-* Serviceはビジネスロジックのみ
-* APIはRESTで統一
-* UUIDによる同期
-* カテゴリもUUIDで同期
-* 論理削除を採用
-* Offline Firstを維持する
-* 将来のクラウド移行を考慮する
-* Android・Backend・Webを疎結合に保つ
+- UIはビジネスロジックを持たない
+- DBアクセスはRepositoryのみ
+- SQLはRepositoryのみ
+- Serviceはビジネスロジックのみ
+- APIはRESTで統一
+- UUIDによる同期
+- カテゴリもUUIDで同期
+- 論理削除を採用
+- Offline Firstを維持する
+- 将来のクラウド移行を考慮する
+- Android・Backend・Webを疎結合に保つ

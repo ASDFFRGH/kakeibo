@@ -1,6 +1,7 @@
 "use client";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
+  BarChart3,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -13,6 +14,7 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { api, Category, Expense } from "../lib/api";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -74,10 +76,16 @@ export default function Home() {
           <WalletCards />
           <span>My 家計簿</span>
         </div>
-        <button className="secondary" onClick={() => setDialog("category")}>
-          <Settings size={18} />
-          カテゴリ
-        </button>
+        <div className="header-actions">
+          <Link className="secondary" href="/summary">
+            <BarChart3 size={18} />
+            サマリー
+          </Link>
+          <button className="secondary" onClick={() => setDialog("category")}>
+            <Settings size={18} />
+            カテゴリ
+          </button>
+        </div>
       </header>
       <section className="summary">
         <div>

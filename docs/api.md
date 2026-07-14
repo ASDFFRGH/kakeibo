@@ -107,11 +107,11 @@ GET /expenses
 
 ### Query Parameter
 
-|名前|必須|説明|
-|----|----|----|
-|from|任意|開始日|
-|to|任意|終了日|
-|category_uuid|任意|カテゴリUUID|
+| 名前          | 必須 | 説明         |
+| ------------- | ---- | ------------ |
+| from          | 任意 | 開始日       |
+| to            | 任意 | 終了日       |
+| category_uuid | 任意 | カテゴリUUID |
 
 ---
 
@@ -286,6 +286,65 @@ DELETE /categories/{uuid}
 
 ---
 
+# Summary API
+
+支出データから指定期間の合計と内訳を取得する。論理削除済み支出は対象外とする。
+
+## GET
+
+```
+GET /summaries?period=month&date=2026-07-14
+```
+
+### Query Parameter
+
+| 名前   | 必須 | 説明                                     |
+| ------ | ---- | ---------------------------------------- |
+| period | 必須 | `day`、`week`、`month`、`year`のいずれか |
+| date   | 必須 | 集計期間を決める基準日。`YYYY-MM-DD`形式 |
+
+週別は基準日を含む月曜日から日曜日を対象とする。日別・週別・月別は日単位、年別は月単位の内訳を返す。支出が存在しない内訳も0円、0件として返す。
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "period": "month",
+    "anchor_date": "2026-07-14",
+    "from": "2026-07-01",
+    "to": "2026-07-31",
+    "total_amount": 12500,
+    "expense_count": 8,
+    "buckets": [
+      {
+        "key": "2026-07-01",
+        "from": "2026-07-01",
+        "to": "2026-07-01",
+        "amount": 1200,
+        "expense_count": 1
+      }
+    ]
+  }
+}
+```
+
+### Error
+
+`period`が未指定または未対応の値、もしくは`date`が不正な場合は`400 Bad Request`を返す。
+
+```json
+{
+  "success": false,
+  "message": "period must be day, week, month or year"
+}
+```
+
+サマリーは派生データのため保存されず、同期対象にも含めない。
+
+---
+
 # 同期API
 
 Androidから未同期データをまとめて送信し、サーバー側の更新データを取得する。
@@ -367,10 +426,7 @@ updated_at
 {
   "success": true,
   "server_time": "2026-07-11T12:00:00Z",
-  "synced": [
-    "uuid1",
-    "uuid2"
-  ],
+  "synced": ["uuid1", "uuid2"],
   "data": {
     "categories": [
       {
@@ -411,15 +467,15 @@ Androidはdataの内容をRoomへ反映し、server_timeを次回同期用のlas
 
 # HTTPステータス
 
-|Status|内容|
-|-------|----|
-|200|正常|
-|201|作成成功|
-|204|削除成功|
-|400|リクエスト不正|
-|404|対象なし|
-|409|競合|
-|500|サーバエラー|
+| Status | 内容           |
+| ------ | -------------- |
+| 200    | 正常           |
+| 201    | 作成成功       |
+| 204    | 削除成功       |
+| 400    | リクエスト不正 |
+| 404    | 対象なし       |
+| 409    | 競合           |
+| 500    | サーバエラー   |
 
 ---
 

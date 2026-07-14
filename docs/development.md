@@ -200,11 +200,11 @@ android/gradle/wrapper/gradle-wrapper.properties
 
 Docker Composeでは以下を起動する。
 
-|サービス|用途|ポート|
-|----|----|----|
-|db|PostgreSQL|5432|
-|backend|Go REST API|8080|
-|frontend|Next.js|3000|
+| サービス | 用途        | ポート |
+| -------- | ----------- | ------ |
+| db       | PostgreSQL  | 5432   |
+| backend  | Go REST API | 8080   |
+| frontend | Next.js     | 3000   |
 
 環境変数は`.env`で管理する。
 
@@ -284,6 +284,33 @@ DDLを直接編集して既存Migrationを書き換えない。
 - API
 - 同期
 - Docker
+
+---
+
+# 期間サマリーのテスト
+
+Backendは期間境界、ゼロ件内訳、論理削除済み支出の除外、範囲外支出の除外をGo単体テストで確認する。
+
+```bash
+cd backend
+go test ./...
+```
+
+Frontendは日・週・月・年の期間移動をNode.js標準テストで確認する。
+
+```bash
+cd frontend
+npm test
+npm run typecheck
+npm run build
+```
+
+Androidは日・週・月・年の集計、ゼロ件、削除済み支出の除外をローカル単体テストで確認する。
+
+```bash
+cd android
+./gradlew testDebugUnitTest lintDebug assembleDebug
+```
 
 ---
 

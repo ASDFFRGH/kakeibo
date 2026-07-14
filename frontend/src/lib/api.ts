@@ -15,6 +15,23 @@ export type Expense = {
   updated_at: string;
   deleted_at: string | null;
 };
+export type SummaryPeriod = "day" | "week" | "month" | "year";
+export type SummaryBucket = {
+  key: string;
+  from: string;
+  to: string;
+  amount: number;
+  expense_count: number;
+};
+export type Summary = {
+  period: SummaryPeriod;
+  anchor_date: string;
+  from: string;
+  to: string;
+  total_amount: number;
+  expense_count: number;
+  buckets: SummaryBucket[];
+};
 type Envelope<T> = { success: boolean; data: T; message?: string };
 const base =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api/v1";
@@ -59,4 +76,8 @@ export const api = {
     }),
   deleteExpense: (id: string) =>
     request<void>(`/expenses/${id}`, { method: "DELETE" }),
+  summary: (period: SummaryPeriod, date: string) =>
+    request<Summary>(
+      `/summaries?period=${encodeURIComponent(period)}&date=${encodeURIComponent(date)}`,
+    ),
 };

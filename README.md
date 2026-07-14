@@ -115,6 +115,8 @@ Androidでは支出とカテゴリを端末内のRoom Databaseへ保存するた
 
 Web画面で変更したデータも次回のAndroid同期で端末へ反映されます。同じデータが両方で変更された場合は、`updated_at`が新しいデータを優先し、同時刻ならサーバー側を優先します。削除は同期のため論理削除として保持されます。
 
+Androidでは上部のサマリーアイコン、Webではヘッダーの「サマリー」から期間集計を表示できます。日別、月曜始まりの週別、月別、年別を切り替え、前後の期間へ移動できます。AndroidはRoom内の支出を集計するため、オフラインでも利用できます。
+
 ## 開発コマンド
 
 Dockerを使わず個別に開発するときも、PostgreSQLはDockerで起動するのが簡単です。
@@ -137,6 +139,7 @@ Frontend（Node.js 20.9以上の20 LTS）:
 ```bash
 cd frontend
 npm install
+npm test
 npm run dev
 npm run build
 ```
@@ -157,6 +160,7 @@ cd android
 - `GET/PUT/DELETE /api/v1/expenses/{uuid}`
 - `GET/POST /api/v1/categories`
 - `PUT/DELETE /api/v1/categories/{uuid}`
+- `GET /api/v1/summaries?period=month&date=2026-07-14`
 - `POST /api/v1/sync`
 
 認証はMVPの対象外です。LAN外へポートを公開しないでください。
