@@ -1,4 +1,4 @@
-# 家計簿
+# My 家計簿
 
 Androidを中心に、オフラインで記録し、必要なときだけ自宅PCへ同期できる家計簿アプリです。PCではWeb画面から同じ支出・カテゴリを管理できます。
 
@@ -84,6 +84,30 @@ API_BASE_URL=http://192.168.1.20:8080/api/v1/
 ```
 
 PCのファイアウォールでTCP `8080`への接続が許可されていることも確認してください。実機からブラウザで`http://PCのIP:8080/health`を開き、`{"data":{"status":"ok"},"success":true}`が表示されれば接続できます。
+
+## Androidのアプリ名とアイコンを変更する
+
+### アプリ名
+
+Androidのアプリ名は`android/app/src/main/res/values/strings.xml`の`app_name`で管理しています。
+
+```xml
+<string name="app_name">My 家計簿</string>
+```
+
+`AndroidManifest.xml`とアプリ内のタイトルはこの値を参照するため、`app_name`を変更するとランチャー上の名前と画面タイトルが同時に変わります。
+
+### アプリアイコン
+
+現在のアイコンは、深緑の背景に財布とコインを配置したデザインです。関連ファイルは次の通りです。
+
+- `android/app/src/main/res/drawable/ic_launcher_foreground.xml`: アイコン前景
+- `android/app/src/main/res/drawable/ic_launcher_legacy.xml`: Android 7.1以前向けアイコン
+- `android/app/src/main/res/values/colors.xml`: アイコン背景色
+- `android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml`: 通常のアダプティブアイコン
+- `android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml`: 円形のアダプティブアイコン
+
+Android Studioで画像から変更する場合は、`android/app`を右クリックして「New」→「Image Asset」を開きます。「Launcher Icons (Adaptive and Legacy)」を選び、Foreground LayerとBackground Layerを設定して`ic_launcher`という名前で生成してください。既存ファイルを置き換えた後にアプリを再インストールすると反映されます。
 
 ## 使い方
 

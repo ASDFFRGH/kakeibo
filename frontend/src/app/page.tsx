@@ -72,7 +72,7 @@ export default function Home() {
       <header>
         <div className="brand">
           <WalletCards />
-          <span>家計簿</span>
+          <span>My 家計簿</span>
         </div>
         <button className="secondary" onClick={() => setDialog("category")}>
           <Settings size={18} />
