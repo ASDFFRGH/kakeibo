@@ -21,6 +21,8 @@ import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.ChevronLeft
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -55,6 +57,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,12 +71,15 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import jp.local.kakeibo.data.CategoryEntity
 import jp.local.kakeibo.data.ExpenseEntity
+import jp.local.kakeibo.expense.defaultExpenseDate
+import jp.local.kakeibo.expense.monthlyExpenses
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
 data class UiState(
@@ -154,10 +160,21 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
     var expenseEditorOpen by remember { mutableStateOf(false) }
     var categoryEditorOpen by remember { mutableStateOf(false) }
     var summaryOpen by remember { mutableStateOf(false) }
+    var selectedMonthText by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
+    var selectedCategoryUuid by rememberSaveable { mutableStateOf("") }
+    val selectedMonth = YearMonth.parse(selectedMonthText)
     val snackbar = remember { SnackbarHostState() }
 
     LaunchedEffect(state.message) {
         state.message?.let { snackbar.showSnackbar(it) }
+    }
+    LaunchedEffect(state.categories, selectedCategoryUuid) {
+        if (
+            selectedCategoryUuid.isNotEmpty() &&
+            state.categories.none { it.uuid == selectedCategoryUuid }
+        ) {
+            selectedCategoryUuid = ""
+        }
     }
 
     Scaffold(
@@ -187,6 +204,8 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                     onClick = { expenseEditorOpen = true },
                     icon = { Icon(Icons.Outlined.Add, null) },
                     text = { Text("支出を追加") },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
                 )
             }
         },
@@ -197,7 +216,11 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
         } else {
             ExpenseList(
                 state = state,
+                selectedMonth = selectedMonth,
+                selectedCategoryUuid = selectedCategoryUuid,
                 modifier = Modifier.padding(padding),
+                onMonthChange = { selectedMonthText = it.toString() },
+                onCategoryChange = { selectedCategoryUuid = it },
                 onEdit = { editingExpense = it },
                 onDelete = viewModel::deleteExpense,
             )
@@ -208,6 +231,8 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
         ExpenseEditor(
             current = editingExpense,
             categories = state.categories,
+            initialDate = selectedMonth.defaultExpenseDate(),
+            initialCategoryUuid = selectedCategoryUuid,
             onClose = {
                 expenseEditorOpen = false
                 editingExpense = null
@@ -232,28 +257,51 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
 @Composable
 private fun ExpenseList(
     state: UiState,
+    selectedMonth: YearMonth,
+    selectedCategoryUuid: String,
     modifier: Modifier = Modifier,
+    onMonthChange: (YearMonth) -> Unit,
+    onCategoryChange: (String) -> Unit,
     onEdit: (ExpenseEntity) -> Unit,
     onDelete: (ExpenseEntity) -> Unit,
 ) {
+    val visibleExpenses =
+        state.expenses.monthlyExpenses(selectedMonth, selectedCategoryUuid.ifEmpty { null })
+    val currentMonth = selectedMonth == YearMonth.now()
+
     Column(modifier.fillMaxSize()) {
-        val total = state.expenses.sumOf { it.amount }
+        val total = visibleExpenses.sumOf { it.amount }
         Column(Modifier.padding(20.dp, 16.dp)) {
-            Text("支出合計", style = MaterialTheme.typography.labelMedium)
+            Text(
+                if (currentMonth) "今月の支出" else "${selectedMonth.monthValue}月の支出",
+                style = MaterialTheme.typography.labelMedium,
+            )
             Text(
                 "%,d円".format(total),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
             )
+            Text(
+                "${visibleExpenses.size}件",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
+        ExpenseToolbar(
+            selectedMonth = selectedMonth,
+            categories = state.categories,
+            selectedCategoryUuid = selectedCategoryUuid,
+            onMonthChange = onMonthChange,
+            onCategoryChange = onCategoryChange,
+        )
         HorizontalDivider()
-        if (state.expenses.isEmpty()) {
+        if (visibleExpenses.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("支出はまだありません", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("この月の支出はありません", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
             LazyColumn {
-                items(state.expenses, key = { it.uuid }) { expense ->
+                items(visibleExpenses, key = { it.uuid }) { expense ->
                     ExpenseRow(
                         expense = expense,
                         categories = state.categories,
@@ -268,6 +316,88 @@ private fun ExpenseList(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExpenseToolbar(
+    selectedMonth: YearMonth,
+    categories: List<CategoryEntity>,
+    selectedCategoryUuid: String,
+    onMonthChange: (YearMonth) -> Unit,
+    onCategoryChange: (String) -> Unit,
+) {
+    var categoryMenuOpen by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = { onMonthChange(selectedMonth.minusMonths(1)) }) {
+                Icon(Icons.Outlined.ChevronLeft, "前月")
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.CalendarMonth, null)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    selectedMonth.format(DateTimeFormatter.ofPattern("yyyy年M月")),
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            IconButton(onClick = { onMonthChange(selectedMonth.plusMonths(1)) }) {
+                Icon(Icons.Outlined.ChevronRight, "翌月")
+            }
+        }
+        ExposedDropdownMenuBox(
+            expanded = categoryMenuOpen,
+            onExpandedChange = { categoryMenuOpen = !categoryMenuOpen },
+        ) {
+            OutlinedTextField(
+                value =
+                    stateCategoryName(
+                        categories = categories,
+                        selectedCategoryUuid = selectedCategoryUuid,
+                    ),
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("カテゴリで絞り込み") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(categoryMenuOpen) },
+                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+            )
+            ExposedDropdownMenu(
+                expanded = categoryMenuOpen,
+                onDismissRequest = { categoryMenuOpen = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("すべてのカテゴリ") },
+                    onClick = {
+                        onCategoryChange("")
+                        categoryMenuOpen = false
+                    },
+                )
+                categories.forEach { category ->
+                    DropdownMenuItem(
+                        text = { Text(category.name) },
+                        onClick = {
+                            onCategoryChange(category.uuid)
+                            categoryMenuOpen = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun stateCategoryName(
+    categories: List<CategoryEntity>,
+    selectedCategoryUuid: String,
+): String =
+    categories.find { it.uuid == selectedCategoryUuid }?.name ?: "すべてのカテゴリ"
 
 @Composable
 private fun ExpenseRow(
@@ -298,12 +428,19 @@ private fun ExpenseRow(
 private fun ExpenseEditor(
     current: ExpenseEntity?,
     categories: List<CategoryEntity>,
+    initialDate: LocalDate,
+    initialCategoryUuid: String,
     onClose: () -> Unit,
     onSave: (ExpenseEntity?, LocalDate, Long, String, String) -> Unit,
 ) {
-    var date by remember { mutableStateOf(current?.date?.let(LocalDate::parse) ?: LocalDate.now()) }
+    var date by remember { mutableStateOf(current?.date?.let(LocalDate::parse) ?: initialDate) }
     var amount by remember { mutableStateOf(current?.amount?.toString().orEmpty()) }
-    var categoryUuid by remember { mutableStateOf(current?.categoryUuid ?: categories.firstOrNull()?.uuid.orEmpty()) }
+    var categoryUuid by remember {
+        mutableStateOf(
+            current?.categoryUuid
+                ?: initialCategoryUuid.ifEmpty { categories.firstOrNull()?.uuid.orEmpty() },
+        )
+    }
     var memo by remember { mutableStateOf(current?.memo.orEmpty()) }
     var categoryMenuOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
