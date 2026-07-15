@@ -16,6 +16,16 @@ android {
         versionName = "1.3"
         buildConfigField("String", "API_BASE_URL", "\"${project.findProperty("API_BASE_URL") ?: "http://10.0.2.2:8080/api/v1/"}\"")
     }
+    signingConfigs {
+        getByName("debug") {
+            System.getenv("ANDROID_DEBUG_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }?.let {
+                storeFile = file(it)
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
     buildFeatures {
         compose = true
         buildConfig = true
