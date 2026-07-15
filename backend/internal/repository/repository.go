@@ -68,6 +68,31 @@ func (r *Repository) DeleteCategory(ctx context.Context, id string) error {
 	return err
 }
 
+func (r *Repository) ListDeletedCategories(ctx context.Context) ([]model.Category, error) {
+	rows, err := r.db.Query(ctx, `SELECT uuid,name,created_at,updated_at,deleted_at FROM categories WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []model.Category{}
+	for rows.Next() {
+		var x model.Category
+		if err := rows.Scan(&x.UUID, &x.Name, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, x)
+	}
+	return items, rows.Err()
+}
+
+func (r *Repository) RestoreCategory(ctx context.Context, id string) error {
+	tag, err := r.db.Exec(ctx, `UPDATE categories SET deleted_at=NULL,updated_at=NOW() WHERE uuid=$1 AND deleted_at IS NOT NULL`, id)
+	if err == nil && tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return err
+}
+
 func (r *Repository) ListExpenses(ctx context.Context, from, to, category string, includeDeleted bool) ([]model.Expense, error) {
 	rows, err := r.db.Query(ctx, `SELECT uuid,expense_date,amount,category_uuid,memo,created_at,updated_at,deleted_at FROM expenses
 	WHERE (NULLIF($1,'') IS NULL OR expense_date >= NULLIF($1,'')::date) AND (NULLIF($2,'') IS NULL OR expense_date <= NULLIF($2,'')::date) AND (NULLIF($3,'') IS NULL OR category_uuid=NULLIF($3,'')::uuid) AND ($4 OR deleted_at IS NULL) ORDER BY expense_date DESC,created_at DESC`, from, to, category, includeDeleted)
@@ -117,6 +142,39 @@ func (r *Repository) SaveExpense(ctx context.Context, x model.Expense) (model.Ex
 }
 func (r *Repository) DeleteExpense(ctx context.Context, id string) error {
 	tag, err := r.db.Exec(ctx, `UPDATE expenses SET deleted_at=NOW(),updated_at=NOW() WHERE uuid=$1 AND deleted_at IS NULL`, id)
+	if err == nil && tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return err
+}
+
+func (r *Repository) ListDeletedExpenses(ctx context.Context) ([]model.Expense, error) {
+	rows, err := r.db.Query(ctx, `SELECT uuid,expense_date,amount,category_uuid,memo,created_at,updated_at,deleted_at FROM expenses WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []model.Expense{}
+	for rows.Next() {
+		var x model.Expense
+		var d time.Time
+		if err := rows.Scan(&x.UUID, &d, &x.Amount, &x.CategoryUUID, &x.Memo, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt); err != nil {
+			return nil, err
+		}
+		x.Date = d.Format("2006-01-02")
+		items = append(items, x)
+	}
+	return items, rows.Err()
+}
+
+func (r *Repository) RestoreExpense(ctx context.Context, id string) error {
+	tag, err := r.db.Exec(ctx, `WITH target AS (
+		SELECT category_uuid FROM expenses WHERE uuid=$1 AND deleted_at IS NOT NULL
+	), restored_category AS (
+		UPDATE categories SET deleted_at=NULL,updated_at=NOW()
+		WHERE uuid=(SELECT category_uuid FROM target) AND deleted_at IS NOT NULL
+	)
+	UPDATE expenses SET deleted_at=NULL,updated_at=NOW() WHERE uuid=$1 AND deleted_at IS NOT NULL`, id)
 	if err == nil && tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}

@@ -15,6 +15,10 @@ export type Expense = {
   updated_at: string;
   deleted_at: string | null;
 };
+export type TrashData = {
+  categories: Category[];
+  expenses: Expense[];
+};
 export type SummaryPeriod = "day" | "week" | "month" | "year";
 export type SummaryBucket = {
   key: string;
@@ -76,6 +80,11 @@ export const api = {
     }),
   deleteExpense: (id: string) =>
     request<void>(`/expenses/${id}`, { method: "DELETE" }),
+  trash: () => request<TrashData>("/trash"),
+  restoreCategory: (id: string) =>
+    request<void>(`/categories/${id}/restore`, { method: "POST" }),
+  restoreExpense: (id: string) =>
+    request<void>(`/expenses/${id}/restore`, { method: "POST" }),
   summary: (period: SummaryPeriod, date: string) =>
     request<Summary>(
       `/summaries?period=${encodeURIComponent(period)}&date=${encodeURIComponent(date)}`,

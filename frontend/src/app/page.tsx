@@ -8,6 +8,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   Settings,
   Trash2,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { api, Category, Expense } from "../lib/api";
+import { orderCategoriesByExpenseFrequency } from "../lib/category-order.mjs";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const money = new Intl.NumberFormat("ja-JP", {
@@ -29,7 +31,9 @@ export default function Home() {
     [error, setError] = useState("");
   const [month, setMonth] = useState(today().slice(0, 7)),
     [categoryFilter, setCategoryFilter] = useState(""),
-    [dialog, setDialog] = useState<"expense" | "category" | null>(null),
+    [dialog, setDialog] = useState<"expense" | "category" | "trash" | null>(
+      null,
+    ),
     [editing, setEditing] = useState<Expense | null>(null);
   const load = useCallback(async () => {
     setLoading(true);
@@ -40,8 +44,12 @@ export default function Home() {
           .toISOString()
           .slice(0, 10),
         query = `?from=${from}&to=${to}${categoryFilter ? `&category_uuid=${categoryFilter}` : ""}`;
-      const [c, e] = await Promise.all([api.categories(), api.expenses(query)]);
-      setCategories(c);
+      const [c, e, allExpenses] = await Promise.all([
+        api.categories(),
+        api.expenses(query),
+        api.expenses(),
+      ]);
+      setCategories(orderCategoriesByExpenseFrequency(c, allExpenses));
       setExpenses(e);
     } catch (e) {
       setError(e instanceof Error ? e.message : "読込に失敗しました");
@@ -84,6 +92,10 @@ export default function Home() {
           <button className="secondary" onClick={() => setDialog("category")}>
             <Settings size={18} />
             カテゴリ
+          </button>
+          <button className="secondary" onClick={() => setDialog("trash")}>
+            <Trash2 size={18} />
+            ゴミ箱
           </button>
         </div>
       </header>
@@ -189,6 +201,13 @@ export default function Home() {
       )}
       {dialog === "category" && (
         <CategoryDialog
+          categories={categories}
+          close={() => setDialog(null)}
+          changed={load}
+        />
+      )}
+      {dialog === "trash" && (
+        <TrashDialog
           categories={categories}
           close={() => setDialog(null)}
           changed={load}
@@ -367,6 +386,125 @@ function CategoryDialog({
             </div>
           ))}
         </div>
+      </section>
+    </div>
+  );
+}
+
+function TrashDialog({
+  categories,
+  close,
+  changed,
+}: {
+  categories: Category[];
+  close: () => void;
+  changed: () => Promise<void>;
+}) {
+  const [deletedCategories, setDeletedCategories] = useState<Category[]>([]),
+    [deletedExpenses, setDeletedExpenses] = useState<Expense[]>([]),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [restoringId, setRestoringId] = useState("");
+
+  const loadTrash = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const trash = await api.trash();
+      setDeletedCategories(trash.categories);
+      setDeletedExpenses(trash.expenses);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "ゴミ箱の読込に失敗しました");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTrash();
+  }, [loadTrash]);
+
+  const restoreCategory = async (category: Category) => {
+    setRestoringId(category.uuid);
+    setError("");
+    try {
+      await api.restoreCategory(category.uuid);
+      await Promise.all([loadTrash(), changed()]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "復元に失敗しました");
+    } finally {
+      setRestoringId("");
+    }
+  };
+  const restoreExpense = async (expense: Expense) => {
+    setRestoringId(expense.uuid);
+    setError("");
+    try {
+      await api.restoreExpense(expense.uuid);
+      await Promise.all([loadTrash(), changed()]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "復元に失敗しました");
+    } finally {
+      setRestoringId("");
+    }
+  };
+  const allCategories = [...categories, ...deletedCategories];
+
+  return (
+    <div className="overlay">
+      <section className="dialog trash-dialog">
+        <div className="dialog-title">
+          <h2>ゴミ箱</h2>
+          <button onClick={close}>
+            <X />
+          </button>
+        </div>
+        <p>復元したデータは通常の一覧へ戻ります。</p>
+        {error && <div className="error">{error}</div>}
+        {loading ? (
+          <div className="empty">読み込み中...</div>
+        ) : deletedExpenses.length === 0 && deletedCategories.length === 0 ? (
+          <div className="empty">削除済みデータはありません</div>
+        ) : (
+          <div className="trash-list">
+            {deletedExpenses.length > 0 && <h3>支出</h3>}
+            {deletedExpenses.map((expense) => (
+              <div key={expense.uuid}>
+                <span>
+                  <strong>{expense.memo || "支出"}</strong>
+                  <small>
+                    {expense.date}・
+                    {allCategories.find(
+                      (category) => category.uuid === expense.category_uuid,
+                    )?.name ?? "未分類"}
+                  </small>
+                </span>
+                <button
+                  className="secondary"
+                  disabled={restoringId !== ""}
+                  onClick={() => void restoreExpense(expense)}
+                >
+                  <RotateCcw size={16} />
+                  {restoringId === expense.uuid ? "復元中..." : "復元"}
+                </button>
+              </div>
+            ))}
+            {deletedCategories.length > 0 && <h3>カテゴリ</h3>}
+            {deletedCategories.map((category) => (
+              <div key={category.uuid}>
+                <span>{category.name}</span>
+                <button
+                  className="secondary"
+                  disabled={restoringId !== ""}
+                  onClick={() => void restoreCategory(category)}
+                >
+                  <RotateCcw size={16} />
+                  {restoringId === category.uuid ? "復元中..." : "復元"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

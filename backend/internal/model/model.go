@@ -31,3 +31,8 @@ type SyncData struct {
 	Categories []Category `json:"categories"`
 	Expenses   []Expense  `json:"expenses"`
 }
+
+type TrashData struct {
+	Categories []Category `json:"categories"`
+	Expenses   []Expense  `json:"expenses"`
+}

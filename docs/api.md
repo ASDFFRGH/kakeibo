@@ -217,6 +217,42 @@ deleted_at
 
 ---
 
+# ゴミ箱API
+
+## 削除済みデータ一覧
+
+```
+GET /trash
+```
+
+論理削除されたカテゴリと支出を、削除日時の降順で返す。
+
+```json
+{
+  "success": true,
+  "data": {
+    "categories": [],
+    "expenses": []
+  }
+}
+```
+
+## カテゴリ復元
+
+```
+POST /categories/{uuid}/restore
+```
+
+## 支出復元
+
+```
+POST /expenses/{uuid}/restore
+```
+
+復元時は`deleted_at`をNULLへ戻して`updated_at`を更新する。支出が削除済みカテゴリを参照している場合は、カテゴリも同時に復元する。成功時は`204 No Content`を返し、対象が存在しないか削除されていない場合は`404 Not Found`を返す。
+
+---
+
 # Category API
 
 ## カテゴリ一覧取得

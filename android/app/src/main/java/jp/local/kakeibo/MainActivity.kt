@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
@@ -69,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import jp.local.kakeibo.category.orderedByExpenseFrequency
 import jp.local.kakeibo.data.CategoryEntity
 import jp.local.kakeibo.data.ExpenseEntity
 import jp.local.kakeibo.expense.defaultExpenseDate
@@ -85,6 +87,8 @@ import java.time.format.DateTimeFormatter
 data class UiState(
     val expenses: List<ExpenseEntity> = emptyList(),
     val categories: List<CategoryEntity> = emptyList(),
+    val deletedExpenses: List<ExpenseEntity> = emptyList(),
+    val deletedCategories: List<CategoryEntity> = emptyList(),
     val syncing: Boolean = false,
     val message: String? = null,
 )
@@ -96,8 +100,23 @@ class MainViewModel(
     private val syncStatus = MutableStateFlow(false to null as String?)
 
     val state =
-        combine(repository.expenses, repository.categories, syncStatus) { expenses, categories, status ->
-            UiState(expenses, categories, status.first, status.second)
+        combine(
+            combine(
+                repository.expenses,
+                repository.categories,
+                repository.deletedExpenses,
+                repository.deletedCategories,
+            ) { expenses, categories, deletedExpenses, deletedCategories ->
+                UiState(
+                    expenses = expenses,
+                    categories = categories.orderedByExpenseFrequency(expenses),
+                    deletedExpenses = deletedExpenses,
+                    deletedCategories = deletedCategories,
+                )
+            },
+            syncStatus,
+        ) { state, status ->
+            state.copy(syncing = status.first, message = status.second)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
 
     fun saveExpense(
@@ -118,6 +137,10 @@ class MainViewModel(
     ) = launch { repository.saveCategory(category, name) }
 
     fun deleteCategory(category: CategoryEntity) = launch { repository.deleteCategory(category) }
+
+    fun restoreExpense(expense: ExpenseEntity) = launch { repository.restoreExpense(expense) }
+
+    fun restoreCategory(category: CategoryEntity) = launch { repository.restoreCategory(category) }
 
     fun sync() =
         launch {
@@ -160,6 +183,7 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
     var expenseEditorOpen by remember { mutableStateOf(false) }
     var categoryEditorOpen by remember { mutableStateOf(false) }
     var summaryOpen by remember { mutableStateOf(false) }
+    var trashOpen by remember { mutableStateOf(false) }
     var selectedMonthText by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     var selectedCategoryUuid by rememberSaveable { mutableStateOf("") }
     val selectedMonth = YearMonth.parse(selectedMonthText)
@@ -182,11 +206,28 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold) },
                 actions = {
-                    IconButton(onClick = { summaryOpen = !summaryOpen }) {
+                    IconButton(
+                        onClick = {
+                            summaryOpen = !summaryOpen
+                            if (summaryOpen) trashOpen = false
+                        },
+                    ) {
                         if (summaryOpen) {
                             Icon(Icons.AutoMirrored.Outlined.List, "支出一覧")
                         } else {
                             Icon(Icons.Outlined.BarChart, "サマリー")
+                        }
+                    }
+                    IconButton(
+                        onClick = {
+                            trashOpen = !trashOpen
+                            if (trashOpen) summaryOpen = false
+                        },
+                    ) {
+                        if (trashOpen) {
+                            Icon(Icons.AutoMirrored.Outlined.List, "支出一覧")
+                        } else {
+                            Icon(Icons.Outlined.Delete, "ゴミ箱")
                         }
                     }
                     IconButton(onClick = { categoryEditorOpen = true }) {
@@ -199,7 +240,7 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
             )
         },
         floatingActionButton = {
-            if (!summaryOpen) {
+            if (!summaryOpen && !trashOpen) {
                 ExtendedFloatingActionButton(
                     onClick = { expenseEditorOpen = true },
                     icon = { Icon(Icons.Outlined.Add, null) },
@@ -211,7 +252,14 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        if (summaryOpen) {
+        if (trashOpen) {
+            TrashScreen(
+                state = state,
+                modifier = Modifier.padding(padding),
+                onRestoreExpense = viewModel::restoreExpense,
+                onRestoreCategory = viewModel::restoreCategory,
+            )
+        } else if (summaryOpen) {
             SummaryScreen(expenses = state.expenses, modifier = Modifier.padding(padding))
         } else {
             ExpenseList(
@@ -251,6 +299,76 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
             onSave = viewModel::saveCategory,
             onDelete = viewModel::deleteCategory,
         )
+    }
+}
+
+@Composable
+private fun TrashScreen(
+    state: UiState,
+    modifier: Modifier = Modifier,
+    onRestoreExpense: (ExpenseEntity) -> Unit,
+    onRestoreCategory: (CategoryEntity) -> Unit,
+) {
+    val allCategories = state.categories + state.deletedCategories
+
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        item {
+            Text(
+                "ゴミ箱",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
+            )
+            Text(
+                "復元したデータは次回の同期でサーバーにも反映されます。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 20.dp),
+            )
+        }
+        if (state.deletedExpenses.isEmpty() && state.deletedCategories.isEmpty()) {
+            item { Text("削除済みデータはありません", Modifier.padding(vertical = 24.dp)) }
+        }
+        if (state.deletedExpenses.isNotEmpty()) {
+            item {
+                Text("支出", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            items(state.deletedExpenses, key = { "expense-${it.uuid}" }) { expense ->
+                ListItem(
+                    headlineContent = { Text(expense.memo.ifBlank { "支出" }) },
+                    supportingContent = {
+                        val category = allCategories.find { it.uuid == expense.categoryUuid }
+                        Text("${expense.date}  ${category?.name ?: "未分類"}")
+                    },
+                    trailingContent = {
+                        IconButton(onClick = { onRestoreExpense(expense) }) {
+                            Icon(Icons.Outlined.Restore, "支出を復元")
+                        }
+                    },
+                )
+                HorizontalDivider()
+            }
+        }
+        if (state.deletedCategories.isNotEmpty()) {
+            item {
+                Text(
+                    "カテゴリ",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 20.dp),
+                )
+            }
+            items(state.deletedCategories, key = { "category-${it.uuid}" }) { category ->
+                ListItem(
+                    headlineContent = { Text(category.name) },
+                    trailingContent = {
+                        IconButton(onClick = { onRestoreCategory(category) }) {
+                            Icon(Icons.Outlined.Restore, "カテゴリを復元")
+                        }
+                    },
+                )
+                HorizontalDivider()
+            }
+        }
     }
 }
 

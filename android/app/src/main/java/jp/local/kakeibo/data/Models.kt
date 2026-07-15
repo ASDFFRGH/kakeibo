@@ -112,6 +112,12 @@ interface CategoryDao {
     @Query("SELECT * FROM categories WHERE deleted_at IS NULL ORDER BY name")
     fun observe(): Flow<List<CategoryEntity>>
 
+    @Query("SELECT * FROM categories WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")
+    fun observeDeleted(): Flow<List<CategoryEntity>>
+
+    @Query("SELECT * FROM categories WHERE uuid = :uuid")
+    suspend fun find(uuid: String): CategoryEntity?
+
     @Query("SELECT * FROM categories WHERE is_synced = 0")
     suspend fun unsynced(): List<CategoryEntity>
 
@@ -126,6 +132,9 @@ interface CategoryDao {
 interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE deleted_at IS NULL ORDER BY date DESC, created_at DESC")
     fun observe(): Flow<List<ExpenseEntity>>
+
+    @Query("SELECT * FROM expenses WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")
+    fun observeDeleted(): Flow<List<ExpenseEntity>>
 
     @Query("SELECT * FROM expenses WHERE is_synced = 0")
     suspend fun unsynced(): List<ExpenseEntity>

@@ -436,6 +436,41 @@ header > a {
   border-radius: 5px;
   padding: 0 10px;
 }
+.trash-dialog {
+  width: min(620px, 100%);
+}
+.trash-dialog > p {
+  margin: 0;
+  color: #65736c;
+  font-size: 13px;
+}
+.trash-list {
+  max-height: 55vh;
+  overflow: auto;
+}
+.trash-list h3 {
+  margin: 14px 0 6px;
+  font-size: 14px;
+  color: #45534c;
+}
+.trash-list > div {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #e8ecea;
+}
+.trash-list > div > span {
+  display: grid;
+  gap: 3px;
+}
+.trash-list small {
+  color: #718078;
+}
+.trash-list button {
+  flex: 0 0 auto;
+}
 @media (max-width: 700px) {
   main {
     padding: 0 14px 30px;

@@ -31,6 +31,8 @@ class KakeiboRepository(
 ) {
     val categories: Flow<List<CategoryEntity>> = database.categories().observe()
     val expenses: Flow<List<ExpenseEntity>> = database.expenses().observe()
+    val deletedCategories: Flow<List<CategoryEntity>> = database.categories().observeDeleted()
+    val deletedExpenses: Flow<List<ExpenseEntity>> = database.expenses().observeDeleted()
 
     suspend fun saveCategory(
         current: CategoryEntity?,
@@ -83,6 +85,29 @@ class KakeiboRepository(
         database.categories().upsert(
             category.copy(deletedAt = now, updatedAt = now, isSynced = false),
         )
+    }
+
+    suspend fun restoreCategory(category: CategoryEntity) {
+        val now = Instant.now().toString()
+        database.categories().upsert(
+            category.restoredAt(now),
+        )
+    }
+
+    suspend fun restoreExpense(expense: ExpenseEntity) {
+        val now = Instant.now().toString()
+        database.withTransaction {
+            database.categories().find(expense.categoryUuid)?.let { category ->
+                if (category.deletedAt != null) {
+                    database.categories().upsert(
+                        category.restoredAt(now),
+                    )
+                }
+            }
+            database.expenses().upsert(
+                expense.restoredAt(now),
+            )
+        }
     }
 
     suspend fun sync() {

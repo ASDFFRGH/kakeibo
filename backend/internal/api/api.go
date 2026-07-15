@@ -18,6 +18,7 @@ import (
 type API struct {
 	repo        *repository.Repository
 	summaryRepo summaryExpenseRepository
+	trashRepo   trashRepository
 	cors        string
 }
 
@@ -25,8 +26,15 @@ type summaryExpenseRepository interface {
 	ListExpenses(ctx context.Context, from, to, category string, includeDeleted bool) ([]model.Expense, error)
 }
 
+type trashRepository interface {
+	ListDeletedCategories(ctx context.Context) ([]model.Category, error)
+	ListDeletedExpenses(ctx context.Context) ([]model.Expense, error)
+	RestoreCategory(ctx context.Context, id string) error
+	RestoreExpense(ctx context.Context, id string) error
+}
+
 func New(repo *repository.Repository, cors string) http.Handler {
-	a := &API{repo: repo, summaryRepo: repo, cors: cors}
+	a := &API{repo: repo, summaryRepo: repo, trashRepo: repo, cors: cors}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { ok(w, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/v1/categories", a.listCategories)
@@ -38,6 +46,9 @@ func New(repo *repository.Repository, cors string) http.Handler {
 	mux.HandleFunc("POST /api/v1/expenses", a.createExpense)
 	mux.HandleFunc("PUT /api/v1/expenses/{uuid}", a.updateExpense)
 	mux.HandleFunc("DELETE /api/v1/expenses/{uuid}", a.deleteExpense)
+	mux.HandleFunc("GET /api/v1/trash", a.listTrash)
+	mux.HandleFunc("POST /api/v1/categories/{uuid}/restore", a.restoreCategory)
+	mux.HandleFunc("POST /api/v1/expenses/{uuid}/restore", a.restoreExpense)
 	mux.HandleFunc("GET /api/v1/summaries", a.getSummary)
 	mux.HandleFunc("POST /api/v1/sync", a.sync)
 	return a.middleware(mux)
@@ -197,6 +208,33 @@ func (a *API) updateExpense(w http.ResponseWriter, r *http.Request) {
 func (a *API) deleteExpense(w http.ResponseWriter, r *http.Request) {
 	if e := a.repo.DeleteExpense(r.Context(), r.PathValue("uuid")); e != nil {
 		a.handleErr(w, e)
+		return
+	}
+	w.WriteHeader(204)
+}
+func (a *API) listTrash(w http.ResponseWriter, r *http.Request) {
+	categories, err := a.trashRepo.ListDeletedCategories(r.Context())
+	if err != nil {
+		a.handleErr(w, err)
+		return
+	}
+	expenses, err := a.trashRepo.ListDeletedExpenses(r.Context())
+	if err != nil {
+		a.handleErr(w, err)
+		return
+	}
+	ok(w, model.TrashData{Categories: categories, Expenses: expenses})
+}
+func (a *API) restoreCategory(w http.ResponseWriter, r *http.Request) {
+	if err := a.trashRepo.RestoreCategory(r.Context(), r.PathValue("uuid")); err != nil {
+		a.handleErr(w, err)
+		return
+	}
+	w.WriteHeader(204)
+}
+func (a *API) restoreExpense(w http.ResponseWriter, r *http.Request) {
+	if err := a.trashRepo.RestoreExpense(r.Context(), r.PathValue("uuid")); err != nil {
+		a.handleErr(w, err)
 		return
 	}
 	w.WriteHeader(204)
