@@ -2,6 +2,11 @@ package model
 
 import "time"
 
+const (
+	TransactionTypeExpense = "expense"
+	TransactionTypeIncome  = "income"
+)
+
 type Category struct {
 	UUID      string     `json:"uuid"`
 	Name      string     `json:"name"`
@@ -14,6 +19,7 @@ type Expense struct {
 	UUID         string     `json:"uuid"`
 	Date         string     `json:"date"`
 	Amount       int64      `json:"amount"`
+	Type         string     `json:"type"`
 	CategoryUUID string     `json:"category_uuid"`
 	Memo         string     `json:"memo"`
 	CreatedAt    time.Time  `json:"created_at"`

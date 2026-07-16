@@ -54,6 +54,7 @@ class KakeiboRepository(
         uuid: String?,
         date: LocalDate,
         amount: Long,
+        type: String,
         categoryUuid: String,
         memo: String,
         createdAt: String? = null,
@@ -64,6 +65,7 @@ class KakeiboRepository(
                 uuid = uuid ?: UUID.randomUUID().toString(),
                 date = date.toString(),
                 amount = amount,
+                type = type,
                 categoryUuid = categoryUuid,
                 memo = memo,
                 createdAt = createdAt ?: now,
@@ -136,6 +138,7 @@ class KakeiboRepository(
             val database =
                 Room
                     .databaseBuilder(context, AppDatabase::class.java, "kakeibo.db")
+                    .addMigrations(AppDatabase.MIGRATION_1_2)
                     .addCallback(InitialCategoryCallback())
                     .build()
             val gson = GsonBuilder().excludeFieldsWithoutExposeAnnotation().create()

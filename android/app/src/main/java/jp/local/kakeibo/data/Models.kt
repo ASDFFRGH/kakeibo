@@ -10,9 +10,15 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Upsert
+import androidx.room.migration.Migration
 import com.google.gson.annotations.Expose
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.flow.Flow
+
+object TransactionType {
+    const val EXPENSE = "expense"
+    const val INCOME = "income"
+}
 
 @Entity(tableName = "categories")
 data class CategoryEntity(
@@ -56,6 +62,10 @@ data class ExpenseEntity(
     val date: String,
     @field:Expose
     val amount: Long,
+    @ColumnInfo(name = "transaction_type", defaultValue = "'expense'")
+    @field:Expose
+    @SerializedName("type")
+    val type: String = TransactionType.EXPENSE,
     @ColumnInfo(name = "category_uuid")
     @field:Expose
     @SerializedName("category_uuid")
@@ -148,11 +158,22 @@ interface ExpenseDao {
 
 @Database(
     entities = [CategoryEntity::class, ExpenseEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun categories(): CategoryDao
 
     abstract fun expenses(): ExpenseDao
+
+    companion object {
+        val MIGRATION_1_2 =
+            object : Migration(1, 2) {
+                override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "ALTER TABLE expenses ADD COLUMN transaction_type TEXT NOT NULL DEFAULT 'expense'",
+                    )
+                }
+            }
+    }
 }

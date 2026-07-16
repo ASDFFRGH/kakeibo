@@ -94,7 +94,7 @@ func (r *Repository) RestoreCategory(ctx context.Context, id string) error {
 }
 
 func (r *Repository) ListExpenses(ctx context.Context, from, to, category string, includeDeleted bool) ([]model.Expense, error) {
-	rows, err := r.db.Query(ctx, `SELECT uuid,expense_date,amount,category_uuid,memo,created_at,updated_at,deleted_at FROM expenses
+	rows, err := r.db.Query(ctx, `SELECT uuid,expense_date,amount,transaction_type,category_uuid,memo,created_at,updated_at,deleted_at FROM expenses
 	WHERE (NULLIF($1,'') IS NULL OR expense_date >= NULLIF($1,'')::date) AND (NULLIF($2,'') IS NULL OR expense_date <= NULLIF($2,'')::date) AND (NULLIF($3,'') IS NULL OR category_uuid=NULLIF($3,'')::uuid) AND ($4 OR deleted_at IS NULL) ORDER BY expense_date DESC,created_at DESC`, from, to, category, includeDeleted)
 	if err != nil {
 		return nil, err
@@ -104,7 +104,7 @@ func (r *Repository) ListExpenses(ctx context.Context, from, to, category string
 	for rows.Next() {
 		var x model.Expense
 		var d time.Time
-		if err := rows.Scan(&x.UUID, &d, &x.Amount, &x.CategoryUUID, &x.Memo, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt); err != nil {
+		if err := rows.Scan(&x.UUID, &d, &x.Amount, &x.Type, &x.CategoryUUID, &x.Memo, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt); err != nil {
 			return nil, err
 		}
 		x.Date = d.Format("2006-01-02")
@@ -115,7 +115,7 @@ func (r *Repository) ListExpenses(ctx context.Context, from, to, category string
 func (r *Repository) GetExpense(ctx context.Context, id string) (model.Expense, error) {
 	var x model.Expense
 	var d time.Time
-	err := r.db.QueryRow(ctx, `SELECT uuid,expense_date,amount,category_uuid,memo,created_at,updated_at,deleted_at FROM expenses WHERE uuid=$1`, id).Scan(&x.UUID, &d, &x.Amount, &x.CategoryUUID, &x.Memo, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt)
+	err := r.db.QueryRow(ctx, `SELECT uuid,expense_date,amount,transaction_type,category_uuid,memo,created_at,updated_at,deleted_at FROM expenses WHERE uuid=$1`, id).Scan(&x.UUID, &d, &x.Amount, &x.Type, &x.CategoryUUID, &x.Memo, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = ErrNotFound
 	}
@@ -123,6 +123,16 @@ func (r *Repository) GetExpense(ctx context.Context, id string) (model.Expense, 
 	return x, err
 }
 func (r *Repository) SaveExpense(ctx context.Context, x model.Expense) (model.Expense, error) {
+	if x.Type == "" {
+		existing, err := r.GetExpense(ctx, x.UUID)
+		if err == nil {
+			x.Type = existing.Type
+		} else if errors.Is(err, ErrNotFound) {
+			x.Type = model.TransactionTypeExpense
+		} else {
+			return model.Expense{}, err
+		}
+	}
 	now := time.Now().UTC()
 	if x.CreatedAt.IsZero() {
 		x.CreatedAt = now
@@ -131,9 +141,9 @@ func (r *Repository) SaveExpense(ctx context.Context, x model.Expense) (model.Ex
 		x.UpdatedAt = now
 	}
 	var d time.Time
-	err := r.db.QueryRow(ctx, `INSERT INTO expenses(uuid,expense_date,amount,category_uuid,memo,created_at,updated_at,deleted_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)
-	ON CONFLICT(uuid) DO UPDATE SET expense_date=EXCLUDED.expense_date,amount=EXCLUDED.amount,category_uuid=EXCLUDED.category_uuid,memo=EXCLUDED.memo,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
-	WHERE expenses.updated_at < EXCLUDED.updated_at RETURNING uuid,expense_date,amount,category_uuid,memo,created_at,updated_at,deleted_at`, x.UUID, x.Date, x.Amount, x.CategoryUUID, x.Memo, x.CreatedAt, x.UpdatedAt, x.DeletedAt).Scan(&x.UUID, &d, &x.Amount, &x.CategoryUUID, &x.Memo, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt)
+	err := r.db.QueryRow(ctx, `INSERT INTO expenses(uuid,expense_date,amount,transaction_type,category_uuid,memo,created_at,updated_at,deleted_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+	ON CONFLICT(uuid) DO UPDATE SET expense_date=EXCLUDED.expense_date,amount=EXCLUDED.amount,transaction_type=EXCLUDED.transaction_type,category_uuid=EXCLUDED.category_uuid,memo=EXCLUDED.memo,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
+	WHERE expenses.updated_at < EXCLUDED.updated_at RETURNING uuid,expense_date,amount,transaction_type,category_uuid,memo,created_at,updated_at,deleted_at`, x.UUID, x.Date, x.Amount, x.Type, x.CategoryUUID, x.Memo, x.CreatedAt, x.UpdatedAt, x.DeletedAt).Scan(&x.UUID, &d, &x.Amount, &x.Type, &x.CategoryUUID, &x.Memo, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r.GetExpense(ctx, x.UUID)
 	}
@@ -149,7 +159,7 @@ func (r *Repository) DeleteExpense(ctx context.Context, id string) error {
 }
 
 func (r *Repository) ListDeletedExpenses(ctx context.Context) ([]model.Expense, error) {
-	rows, err := r.db.Query(ctx, `SELECT uuid,expense_date,amount,category_uuid,memo,created_at,updated_at,deleted_at FROM expenses WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC`)
+	rows, err := r.db.Query(ctx, `SELECT uuid,expense_date,amount,transaction_type,category_uuid,memo,created_at,updated_at,deleted_at FROM expenses WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +168,7 @@ func (r *Repository) ListDeletedExpenses(ctx context.Context) ([]model.Expense, 
 	for rows.Next() {
 		var x model.Expense
 		var d time.Time
-		if err := rows.Scan(&x.UUID, &d, &x.Amount, &x.CategoryUUID, &x.Memo, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt); err != nil {
+		if err := rows.Scan(&x.UUID, &d, &x.Amount, &x.Type, &x.CategoryUUID, &x.Memo, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt); err != nil {
 			return nil, err
 		}
 		x.Date = d.Format("2006-01-02")
@@ -205,7 +215,7 @@ func (r *Repository) changedCategories(ctx context.Context, since time.Time) ([]
 	return a, rows.Err()
 }
 func (r *Repository) changedExpenses(ctx context.Context, since time.Time) ([]model.Expense, error) {
-	rows, err := r.db.Query(ctx, `SELECT uuid,expense_date,amount,category_uuid,memo,created_at,updated_at,deleted_at FROM expenses WHERE updated_at >= $1`, since)
+	rows, err := r.db.Query(ctx, `SELECT uuid,expense_date,amount,transaction_type,category_uuid,memo,created_at,updated_at,deleted_at FROM expenses WHERE updated_at >= $1`, since)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +224,7 @@ func (r *Repository) changedExpenses(ctx context.Context, since time.Time) ([]mo
 	for rows.Next() {
 		var x model.Expense
 		var d time.Time
-		if err := rows.Scan(&x.UUID, &d, &x.Amount, &x.CategoryUUID, &x.Memo, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt); err != nil {
+		if err := rows.Scan(&x.UUID, &d, &x.Amount, &x.Type, &x.CategoryUUID, &x.Memo, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt); err != nil {
 			return nil, err
 		}
 		x.Date = d.Format("2006-01-02")

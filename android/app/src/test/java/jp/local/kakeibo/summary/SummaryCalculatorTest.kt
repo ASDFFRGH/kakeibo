@@ -20,8 +20,8 @@ class SummaryCalculatorTest {
         assertEquals(LocalDate.parse("2026-07-13"), result.from)
         assertEquals(LocalDate.parse("2026-07-19"), result.to)
         assertEquals(7, result.buckets.size)
-        assertEquals(2000, result.totalAmount)
-        assertEquals(0, result.buckets[1].amount)
+        assertEquals(2000, result.totalExpense)
+        assertEquals(0, result.buckets[1].expenseAmount)
     }
 
     @Test
@@ -37,7 +37,7 @@ class SummaryCalculatorTest {
         val result = SummaryCalculator.calculate(SummaryPeriod.MONTH, LocalDate.parse("2026-02-10"), expenses)
 
         assertEquals(28, result.buckets.size)
-        assertEquals(300, result.totalAmount)
+        assertEquals(300, result.totalExpense)
         assertEquals(2, result.expenseCount)
     }
 
@@ -53,28 +53,47 @@ class SummaryCalculatorTest {
         val result = SummaryCalculator.calculate(SummaryPeriod.YEAR, LocalDate.parse("2026-07-14"), expenses)
 
         assertEquals(12, result.buckets.size)
-        assertEquals(1000, result.buckets[0].amount)
-        assertEquals(3000, result.buckets[6].amount)
-        assertEquals(4000, result.totalAmount)
+        assertEquals(1000, result.buckets[0].expenseAmount)
+        assertEquals(3000, result.buckets[6].expenseAmount)
+        assertEquals(4000, result.totalExpense)
     }
 
     @Test
     fun `day summary returns zero totals when no expenses exist`() {
         val result = SummaryCalculator.calculate(SummaryPeriod.DAY, LocalDate.parse("2026-07-14"), emptyList())
 
-        assertEquals(0, result.totalAmount)
+        assertEquals(0, result.totalExpense)
         assertEquals(0, result.expenseCount)
         assertEquals(1, result.buckets.size)
+    }
+
+    @Test
+    fun `summary separates income expense and balance`() {
+        val transactions =
+            listOf(
+                expense("2026-07-14", 1000),
+                expense("2026-07-14", 5000, type = jp.local.kakeibo.data.TransactionType.INCOME),
+            )
+
+        val result = SummaryCalculator.calculate(SummaryPeriod.DAY, LocalDate.parse("2026-07-14"), transactions)
+
+        assertEquals(1000, result.totalExpense)
+        assertEquals(5000, result.totalIncome)
+        assertEquals(4000, result.balance)
+        assertEquals(1, result.expenseCount)
+        assertEquals(1, result.incomeCount)
     }
 
     private fun expense(
         date: String,
         amount: Long,
         deletedAt: String? = null,
+        type: String = jp.local.kakeibo.data.TransactionType.EXPENSE,
     ) = ExpenseEntity(
         uuid = "$date-$amount",
         date = date,
         amount = amount,
+        type = type,
         categoryUuid = "10000000-0000-4000-8000-000000000001",
         memo = "test",
         createdAt = "2026-01-01T00:00:00Z",

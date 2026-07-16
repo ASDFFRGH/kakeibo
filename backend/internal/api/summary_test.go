@@ -42,7 +42,7 @@ func TestSummaryEndpointReturnsRequestedPeriodTotals(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	if !body.Success || body.Data.TotalAmount != 2000 || body.Data.ExpenseCount != 2 {
+	if !body.Success || body.Data.TotalExpense != 2000 || body.Data.ExpenseCount != 2 {
 		t.Fatalf("body = %#v", body)
 	}
 	if body.Data.From != "2026-07-13" || body.Data.To != "2026-07-19" {

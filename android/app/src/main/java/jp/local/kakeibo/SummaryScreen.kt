@@ -15,7 +15,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -26,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import jp.local.kakeibo.data.ExpenseEntity
@@ -65,27 +65,25 @@ fun SummaryScreen(
         )
         SummaryTotal(summary)
         HorizontalDivider()
-        if (summary.expenseCount == 0) {
+        if (summary.expenseCount + summary.incomeCount == 0) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text("この期間の支出はありません", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("この期間の収支はありません", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
-            val maximumAmount = summary.buckets.maxOfOrNull { it.amount }?.coerceAtLeast(1) ?: 1
             LazyColumn {
                 items(summary.buckets, key = { it.key }) { bucket ->
-                    val amountRatio = bucket.amount.toFloat() / maximumAmount.toFloat()
                     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(bucketLabel(summary.period, bucket.from), fontWeight = FontWeight.Medium)
-                            Text("%,d円  ${bucket.expenseCount}件".format(bucket.amount))
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("+%,d円  ${bucket.incomeCount}件".format(bucket.incomeAmount), color = incomeColor)
+                                Text("-%,d円  ${bucket.expenseCount}件".format(bucket.expenseAmount), color = MaterialTheme.colorScheme.error)
+                                Text("差引 %,d円".format(bucket.balance), fontWeight = FontWeight.Bold)
+                            }
                         }
-                        LinearProgressIndicator(
-                            progress = { amountRatio },
-                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                        )
                     }
                 }
             }
@@ -114,13 +112,20 @@ private fun PeriodNavigator(
 private fun SummaryTotal(summary: SummaryResult) {
     Surface(color = MaterialTheme.colorScheme.primaryContainer) {
         Column(Modifier.fillMaxWidth().padding(20.dp)) {
-            Text("期間合計", style = MaterialTheme.typography.labelMedium)
+            Text("期間の差引", style = MaterialTheme.typography.labelMedium)
             Text(
-                "%,d円".format(summary.totalAmount),
+                "%,d円".format(summary.balance),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
             )
-            Text("${summary.expenseCount}件  ${dateRange(summary)}", style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("収入 +%,d円（${summary.incomeCount}件）".format(summary.totalIncome), color = incomeColor)
+                Text(
+                    "支出 -%,d円（${summary.expenseCount}件）".format(summary.totalExpense),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Text(dateRange(summary), style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -151,3 +156,5 @@ private fun bucketLabel(
     }
 
 private fun shortDate(date: LocalDate): String = date.format(DateTimeFormatter.ofPattern("M/d"))
+
+private val incomeColor = Color(0xFF176B4D)

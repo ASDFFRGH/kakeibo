@@ -96,6 +96,9 @@ func validExpense(x model.Expense) error {
 	if !validUUID(x.UUID) || !validUUID(x.CategoryUUID) || x.Amount <= 0 {
 		return errors.New("valid uuid, category_uuid and positive amount are required")
 	}
+	if x.Type != "" && x.Type != model.TransactionTypeExpense && x.Type != model.TransactionTypeIncome {
+		return errors.New("type must be expense or income")
+	}
 	if _, err := time.Parse("2006-01-02", x.Date); err != nil {
 		return errors.New("date must be YYYY-MM-DD")
 	}

@@ -9,6 +9,7 @@ export type Expense = {
   uuid: string;
   date: string;
   amount: number;
+  type: "expense" | "income";
   category_uuid: string;
   memo: string;
   created_at: string;
@@ -24,16 +25,22 @@ export type SummaryBucket = {
   key: string;
   from: string;
   to: string;
-  amount: number;
+  expense_amount: number;
+  income_amount: number;
+  balance: number;
   expense_count: number;
+  income_count: number;
 };
 export type Summary = {
   period: SummaryPeriod;
   anchor_date: string;
   from: string;
   to: string;
-  total_amount: number;
+  total_expense: number;
+  total_income: number;
+  balance: number;
   expense_count: number;
+  income_count: number;
   buckets: SummaryBucket[];
 };
 type Envelope<T> = { success: boolean; data: T; message?: string };
@@ -62,7 +69,10 @@ export const api = {
     request<void>(`/categories/${id}`, { method: "DELETE" }),
   expenses: (query = "") => request<Expense[]>(`/expenses${query}`),
   saveExpense: (
-    x: Pick<Expense, "uuid" | "date" | "amount" | "category_uuid" | "memo">,
+    x: Pick<
+      Expense,
+      "uuid" | "date" | "amount" | "type" | "category_uuid" | "memo"
+    >,
     editing: boolean,
   ) =>
     request<Expense>(editing ? `/expenses/${x.uuid}` : "/expenses", {
@@ -72,6 +82,7 @@ export const api = {
           ? {
               date: x.date,
               amount: x.amount,
+              type: x.type,
               category_uuid: x.category_uuid,
               memo: x.memo,
             }

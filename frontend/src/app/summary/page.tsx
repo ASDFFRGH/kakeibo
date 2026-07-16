@@ -48,12 +48,6 @@ export default function SummaryPage() {
     void load();
   }, [load]);
 
-  const maximumAmount =
-    summary?.buckets.reduce(
-      (maximum, bucket) => Math.max(maximum, bucket.amount),
-      1,
-    ) ?? 1;
-
   return (
     <main>
       <header>
@@ -70,7 +64,7 @@ export default function SummaryPage() {
       <section className="summary-heading">
         <div>
           <span>期間サマリー</span>
-          <h1>支出の推移</h1>
+          <h1>収支の推移</h1>
         </div>
         <button className="icon" title="再読み込み" onClick={() => void load()}>
           <RefreshCw size={18} />
@@ -120,27 +114,39 @@ export default function SummaryPage() {
         <>
           <section className="summary-result">
             <span>{rangeLabel(summary)}</span>
-            <strong>{money.format(summary.total_amount)}</strong>
-            <small>{summary.expense_count}件</small>
+            <strong>差引 {money.format(summary.balance)}</strong>
+            <div className="summary-totals">
+              <span className="income-amount">
+                収入 +{money.format(summary.total_income)}（
+                {summary.income_count}件）
+              </span>
+              <span className="expense-amount">
+                支出 -{money.format(summary.total_expense)}（
+                {summary.expense_count}件）
+              </span>
+            </div>
           </section>
-          {summary.expense_count === 0 ? (
-            <div className="summary-empty">この期間の支出はありません</div>
+          {summary.expense_count + summary.income_count === 0 ? (
+            <div className="summary-empty">この期間の収支はありません</div>
           ) : (
             <section className="summary-breakdown">
               {summary.buckets.map((bucket) => (
                 <div className="summary-bucket" key={bucket.key}>
                   <div>
                     <span>{bucketLabel(summary.period, bucket.key)}</span>
-                    <small>{bucket.expense_count}件</small>
+                    <small>
+                      {bucket.expense_count + bucket.income_count}件
+                    </small>
                   </div>
-                  <div className="summary-bar-track" aria-hidden="true">
-                    <span
-                      style={{
-                        width: `${(bucket.amount / maximumAmount) * 100}%`,
-                      }}
-                    />
+                  <div className="bucket-totals">
+                    <span className="income-amount">
+                      +{money.format(bucket.income_amount)}
+                    </span>
+                    <span className="expense-amount">
+                      -{money.format(bucket.expense_amount)}
+                    </span>
                   </div>
-                  <strong>{money.format(bucket.amount)}</strong>
+                  <strong>{money.format(bucket.balance)}</strong>
                 </div>
               ))}
             </section>

@@ -95,6 +95,28 @@ header > a {
 .summary small {
   color: #76827d;
 }
+.summary-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-weight: 700;
+}
+.income-amount {
+  color: #176b4d;
+}
+.expense-amount {
+  color: #b3261e;
+}
+.summary .income-amount,
+.summary-result .income-amount,
+.bucket-totals .income-amount {
+  color: #176b4d;
+}
+.summary .expense-amount,
+.summary-result .expense-amount,
+.bucket-totals .expense-amount {
+  color: #b3261e;
+}
 .toolbar {
   display: flex;
   align-items: center;
@@ -334,6 +356,12 @@ header > a {
 .summary-bucket > strong {
   text-align: right;
 }
+.bucket-totals {
+  display: flex;
+  justify-content: flex-end;
+  gap: 18px;
+  font-weight: 700;
+}
 .summary-bar-track {
   height: 9px;
   overflow: hidden;
@@ -389,6 +417,31 @@ header > a {
   font-size: 13px;
   font-weight: 700;
   color: #4d5c55;
+}
+.transaction-type {
+  display: flex;
+  gap: 18px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #cbd5d0;
+  border-radius: 5px;
+}
+.transaction-type legend {
+  padding: 0 5px;
+  color: #4d5c55;
+  font-size: 13px;
+  font-weight: 700;
+}
+.transaction-type label {
+  display: flex;
+  grid-auto-flow: unset;
+  align-items: center;
+  gap: 6px;
+}
+.transaction-type input {
+  width: auto;
+  height: auto;
+  margin: 0;
 }
 .dialog input,
 .dialog select {
@@ -542,8 +595,9 @@ header > a {
   .summary-bucket {
     grid-template-columns: 90px 1fr;
   }
-  .summary-bucket .summary-bar-track {
+  .summary-bucket .bucket-totals {
     grid-column: 1 / -1;
     grid-row: 2;
+    justify-content: space-between;
   }
 }

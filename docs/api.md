@@ -87,6 +87,7 @@ UTF-8
   "uuid": "3c531efd-f4c3-4d61-a902-xxxxxxxxxxxx",
   "date": "2026-07-11",
   "amount": 1200,
+  "type": "expense",
   "category_uuid": "9f09a7f6-1111-4444-8888-xxxxxxxxxxxx",
   "memo": "ランチ",
   "created_at": "2026-07-11T12:00:00Z",
@@ -125,6 +126,7 @@ GET /expenses
       "uuid": "...",
       "date": "2026-07-11",
       "amount": 1200,
+      "type": "expense",
       "category_uuid": "9f09a7f6-1111-4444-8888-xxxxxxxxxxxx",
       "memo": "ランチ"
     }
@@ -159,6 +161,7 @@ POST /expenses
   "uuid": "xxxxxxxx",
   "date": "2026-07-11",
   "amount": 1200,
+  "type": "income",
   "category_uuid": "9f09a7f6-1111-4444-8888-xxxxxxxxxxxx",
   "memo": "ランチ"
 }
@@ -190,6 +193,7 @@ PUT /expenses/{uuid}
 {
   "date": "2026-07-12",
   "amount": 1500,
+  "type": "expense",
   "category_uuid": "9f09a7f6-2222-4444-8888-xxxxxxxxxxxx",
   "memo": "夕食"
 }
@@ -324,7 +328,7 @@ DELETE /categories/{uuid}
 
 # Summary API
 
-支出データから指定期間の合計と内訳を取得する。論理削除済み支出は対象外とする。
+収支データから指定期間の収入合計、支出合計、差引と内訳を取得する。論理削除済みデータは対象外とする。
 
 ## GET
 
@@ -339,7 +343,7 @@ GET /summaries?period=month&date=2026-07-14
 | period | 必須 | `day`、`week`、`month`、`year`のいずれか |
 | date   | 必須 | 集計期間を決める基準日。`YYYY-MM-DD`形式 |
 
-週別は基準日を含む月曜日から日曜日を対象とする。日別・週別・月別は日単位、年別は月単位の内訳を返す。支出が存在しない内訳も0円、0件として返す。
+週別は基準日を含む月曜日から日曜日を対象とする。日別・週別・月別は日単位、年別は月単位の内訳を返す。収支が存在しない内訳も0円、0件として返す。
 
 ### Response
 
@@ -351,15 +355,21 @@ GET /summaries?period=month&date=2026-07-14
     "anchor_date": "2026-07-14",
     "from": "2026-07-01",
     "to": "2026-07-31",
-    "total_amount": 12500,
+    "total_expense": 12500,
+    "total_income": 200000,
+    "balance": 187500,
     "expense_count": 8,
+    "income_count": 1,
     "buckets": [
       {
         "key": "2026-07-01",
         "from": "2026-07-01",
         "to": "2026-07-01",
-        "amount": 1200,
-        "expense_count": 1
+        "expense_amount": 1200,
+        "income_amount": 0,
+        "balance": -1200,
+        "expense_count": 1,
+        "income_count": 0
       }
     ]
   }
@@ -414,6 +424,7 @@ POST /sync
       "uuid": "xxxxxxxx",
       "date": "2026-07-11",
       "amount": 1200,
+      "type": "expense",
       "category_uuid": "9f09a7f6-1111-4444-8888-xxxxxxxxxxxx",
       "memo": "ランチ",
       "created_at": "2026-07-11T10:00:00Z",
@@ -478,6 +489,7 @@ updated_at
         "uuid": "xxxxxxxx",
         "date": "2026-07-11",
         "amount": 1200,
+        "type": "expense",
         "category_uuid": "9f09a7f6-1111-4444-8888-xxxxxxxxxxxx",
         "memo": "ランチ",
         "created_at": "2026-07-11T10:00:00Z",

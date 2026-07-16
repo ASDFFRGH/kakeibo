@@ -1,6 +1,7 @@
 package jp.local.kakeibo.summary
 
 import jp.local.kakeibo.data.ExpenseEntity
+import jp.local.kakeibo.data.TransactionType
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.temporal.TemporalAdjusters
@@ -30,8 +31,11 @@ data class SummaryBucket(
     val key: String,
     val from: LocalDate,
     val to: LocalDate,
-    val amount: Long = 0,
+    val expenseAmount: Long = 0,
+    val incomeAmount: Long = 0,
+    val balance: Long = 0,
     val expenseCount: Int = 0,
+    val incomeCount: Int = 0,
 )
 
 data class SummaryResult(
@@ -39,8 +43,11 @@ data class SummaryResult(
     val anchorDate: LocalDate,
     val from: LocalDate,
     val to: LocalDate,
-    val totalAmount: Long,
+    val totalExpense: Long,
+    val totalIncome: Long,
+    val balance: Long,
     val expenseCount: Int,
+    val incomeCount: Int,
     val buckets: List<SummaryBucket>,
 )
 
@@ -53,8 +60,10 @@ object SummaryCalculator {
         val (from, to) = bounds(period, anchorDate)
         val buckets = emptyBuckets(period, from, to).toMutableList()
         val bucketIndexes = buckets.mapIndexed { index, bucket -> bucket.key to index }.toMap()
-        var totalAmount = 0L
+        var totalExpense = 0L
+        var totalIncome = 0L
         var expenseCount = 0
+        var incomeCount = 0
 
         expenses.forEach { expense ->
             val date = runCatching { LocalDate.parse(expense.date) }.getOrNull()
@@ -64,13 +73,27 @@ object SummaryCalculator {
             val key = if (period == SummaryPeriod.YEAR) expense.date.take(7) else expense.date
             val index = bucketIndexes[key] ?: return@forEach
             val bucket = buckets[index]
-            buckets[index] =
-                bucket.copy(
-                    amount = bucket.amount + expense.amount,
-                    expenseCount = bucket.expenseCount + 1,
-                )
-            totalAmount += expense.amount
-            expenseCount++
+            if (expense.type == TransactionType.INCOME) {
+                val incomeAmount = bucket.incomeAmount + expense.amount
+                buckets[index] =
+                    bucket.copy(
+                        incomeAmount = incomeAmount,
+                        balance = incomeAmount - bucket.expenseAmount,
+                        incomeCount = bucket.incomeCount + 1,
+                    )
+                totalIncome += expense.amount
+                incomeCount++
+            } else {
+                val expenseAmount = bucket.expenseAmount + expense.amount
+                buckets[index] =
+                    bucket.copy(
+                        expenseAmount = expenseAmount,
+                        balance = bucket.incomeAmount - expenseAmount,
+                        expenseCount = bucket.expenseCount + 1,
+                    )
+                totalExpense += expense.amount
+                expenseCount++
+            }
         }
 
         return SummaryResult(
@@ -78,8 +101,11 @@ object SummaryCalculator {
             anchorDate = anchorDate,
             from = from,
             to = to,
-            totalAmount = totalAmount,
+            totalExpense = totalExpense,
+            totalIncome = totalIncome,
+            balance = totalIncome - totalExpense,
             expenseCount = expenseCount,
+            incomeCount = incomeCount,
             buckets = buckets,
         )
     }

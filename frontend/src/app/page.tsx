@@ -60,10 +60,15 @@ export default function Home() {
   useEffect(() => {
     void load();
   }, [load]);
-  const total = useMemo(
-    () => expenses.reduce((sum, x) => sum + x.amount, 0),
-    [expenses],
-  );
+  const totals = useMemo(() => {
+    const income = expenses
+      .filter((x) => x.type === "income")
+      .reduce((sum, x) => sum + x.amount, 0);
+    const expense = expenses
+      .filter((x) => x.type !== "income")
+      .reduce((sum, x) => sum + x.amount, 0);
+    return { income, expense, balance: income - expense };
+  }, [expenses]);
   const shift = (delta: number) => {
     const d = new Date(
       Number(month.slice(0, 4)),
@@ -73,7 +78,7 @@ export default function Home() {
     setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   };
   const remove = async (x: Expense) => {
-    if (!confirm(`${x.memo || "この支出"}を削除しますか？`)) return;
+    if (!confirm(`${x.memo || "この収支"}を削除しますか？`)) return;
     await api.deleteExpense(x.uuid);
     await load();
   };
@@ -101,8 +106,16 @@ export default function Home() {
       </header>
       <section className="summary">
         <div>
-          <span>今月の支出</span>
-          <strong>{money.format(total)}</strong>
+          <span>今月の収支</span>
+          <strong>差引 {money.format(totals.balance)}</strong>
+          <div className="summary-totals">
+            <span className="income-amount">
+              収入 +{money.format(totals.income)}
+            </span>
+            <span className="expense-amount">
+              支出 -{money.format(totals.expense)}
+            </span>
+          </div>
           <small>{expenses.length}件</small>
         </div>
         <button
@@ -113,7 +126,7 @@ export default function Home() {
           }}
         >
           <Plus size={19} />
-          支出を追加
+          収支を追加
         </button>
       </section>
       <section className="toolbar">
@@ -159,7 +172,7 @@ export default function Home() {
         {loading ? (
           <div className="empty">読み込み中...</div>
         ) : expenses.length === 0 ? (
-          <div className="empty">この月の支出はありません</div>
+          <div className="empty">この月の収支はありません</div>
         ) : (
           expenses.map((x) => (
             <div className="row" key={x.uuid}>
@@ -169,7 +182,14 @@ export default function Home() {
                   "未分類"}
               </span>
               <span className="memo">{x.memo || "-"}</span>
-              <strong>{money.format(x.amount)}</strong>
+              <strong
+                className={
+                  x.type === "income" ? "income-amount" : "expense-amount"
+                }
+              >
+                {x.type === "income" ? "+" : "-"}
+                {money.format(x.amount)}
+              </strong>
               <span className="actions">
                 <button
                   title="編集"
@@ -229,6 +249,7 @@ function ExpenseDialog({
 }) {
   const [date, setDate] = useState(expense?.date ?? today()),
     [amount, setAmount] = useState(expense?.amount.toString() ?? ""),
+    [type, setType] = useState<Expense["type"]>(expense?.type ?? "expense"),
     [category, setCategory] = useState(
       expense?.category_uuid ?? categories[0]?.uuid ?? "",
     ),
@@ -243,6 +264,7 @@ function ExpenseDialog({
           uuid: expense?.uuid ?? crypto.randomUUID(),
           date,
           amount: Number(amount),
+          type,
           category_uuid: category,
           memo,
         },
@@ -260,11 +282,34 @@ function ExpenseDialog({
     >
       <form className="dialog" onSubmit={submit}>
         <div className="dialog-title">
-          <h2>{expense ? "支出を編集" : "支出を追加"}</h2>
+          <h2>{expense ? "収支を編集" : "収支を追加"}</h2>
           <button type="button" onClick={close}>
             <X />
           </button>
         </div>
+        <fieldset className="transaction-type">
+          <legend>種別</legend>
+          <label>
+            <input
+              type="radio"
+              name="type"
+              value="expense"
+              checked={type === "expense"}
+              onChange={() => setType("expense")}
+            />
+            支出
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="type"
+              value="income"
+              checked={type === "income"}
+              onChange={() => setType("income")}
+            />
+            収入
+          </label>
+        </fieldset>
         <label>
           日付
           <input
@@ -467,11 +512,20 @@ function TrashDialog({
           <div className="empty">削除済みデータはありません</div>
         ) : (
           <div className="trash-list">
-            {deletedExpenses.length > 0 && <h3>支出</h3>}
+            {deletedExpenses.length > 0 && <h3>収支</h3>}
             {deletedExpenses.map((expense) => (
               <div key={expense.uuid}>
                 <span>
-                  <strong>{expense.memo || "支出"}</strong>
+                  <strong
+                    className={
+                      expense.type === "income"
+                        ? "income-amount"
+                        : "expense-amount"
+                    }
+                  >
+                    {expense.memo ||
+                      (expense.type === "income" ? "収入" : "支出")}
+                  </strong>
                   <small>
                     {expense.date}・
                     {allCategories.find(

@@ -19,10 +19,10 @@ func TestBuildWeekIncludesMondayToSundayAndZeroAmountDays(t *testing.T) {
 	if result.From != "2026-07-13" || result.To != "2026-07-19" {
 		t.Fatalf("week range = %s..%s", result.From, result.To)
 	}
-	if result.TotalAmount != 2000 || result.ExpenseCount != 2 {
-		t.Fatalf("total = %d, count = %d", result.TotalAmount, result.ExpenseCount)
+	if result.TotalExpense != 2000 || result.ExpenseCount != 2 {
+		t.Fatalf("total = %d, count = %d", result.TotalExpense, result.ExpenseCount)
 	}
-	if len(result.Buckets) != 7 || result.Buckets[1].Amount != 0 {
+	if len(result.Buckets) != 7 || result.Buckets[1].ExpenseAmount != 0 {
 		t.Fatalf("buckets = %#v", result.Buckets)
 	}
 }
@@ -41,8 +41,8 @@ func TestBuildMonthIncludesEveryDayAndExcludesDeletedExpenses(t *testing.T) {
 	if len(result.Buckets) != 28 {
 		t.Fatalf("bucket count = %d", len(result.Buckets))
 	}
-	if result.TotalAmount != 300 || result.ExpenseCount != 2 {
-		t.Fatalf("total = %d, count = %d", result.TotalAmount, result.ExpenseCount)
+	if result.TotalExpense != 300 || result.ExpenseCount != 2 {
+		t.Fatalf("total = %d, count = %d", result.TotalExpense, result.ExpenseCount)
 	}
 }
 
@@ -58,11 +58,27 @@ func TestBuildYearGroupsExpensesIntoTwelveMonths(t *testing.T) {
 	if len(result.Buckets) != 12 {
 		t.Fatalf("bucket count = %d", len(result.Buckets))
 	}
-	if result.Buckets[0].Amount != 1000 || result.Buckets[6].Amount != 3000 {
+	if result.Buckets[0].ExpenseAmount != 1000 || result.Buckets[6].ExpenseAmount != 3000 {
 		t.Fatalf("buckets = %#v", result.Buckets)
 	}
-	if result.TotalAmount != 4000 || result.ExpenseCount != 3 {
-		t.Fatalf("total = %d, count = %d", result.TotalAmount, result.ExpenseCount)
+	if result.TotalExpense != 4000 || result.ExpenseCount != 3 {
+		t.Fatalf("total = %d, count = %d", result.TotalExpense, result.ExpenseCount)
+	}
+}
+
+func TestBuildSeparatesIncomeExpenseAndBalance(t *testing.T) {
+	expenses := []model.Expense{
+		{Date: "2026-07-14", Amount: 1000, Type: model.TransactionTypeExpense},
+		{Date: "2026-07-14", Amount: 5000, Type: model.TransactionTypeIncome},
+	}
+
+	result := Build(Day, mustDate(t, "2026-07-14"), expenses)
+
+	if result.TotalExpense != 1000 || result.TotalIncome != 5000 || result.Balance != 4000 {
+		t.Fatalf("summary = %#v", result)
+	}
+	if result.ExpenseCount != 1 || result.IncomeCount != 1 || result.Buckets[0].Balance != 4000 {
+		t.Fatalf("summary = %#v", result)
 	}
 }
 

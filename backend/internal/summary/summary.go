@@ -17,11 +17,14 @@ const (
 )
 
 type Bucket struct {
-	Key          string `json:"key"`
-	From         string `json:"from"`
-	To           string `json:"to"`
-	Amount       int64  `json:"amount"`
-	ExpenseCount int    `json:"expense_count"`
+	Key           string `json:"key"`
+	From          string `json:"from"`
+	To            string `json:"to"`
+	ExpenseAmount int64  `json:"expense_amount"`
+	IncomeAmount  int64  `json:"income_amount"`
+	Balance       int64  `json:"balance"`
+	ExpenseCount  int    `json:"expense_count"`
+	IncomeCount   int    `json:"income_count"`
 }
 
 type Result struct {
@@ -29,8 +32,11 @@ type Result struct {
 	AnchorDate   string   `json:"anchor_date"`
 	From         string   `json:"from"`
 	To           string   `json:"to"`
-	TotalAmount  int64    `json:"total_amount"`
+	TotalExpense int64    `json:"total_expense"`
+	TotalIncome  int64    `json:"total_income"`
+	Balance      int64    `json:"balance"`
 	ExpenseCount int      `json:"expense_count"`
+	IncomeCount  int      `json:"income_count"`
 	Buckets      []Bucket `json:"buckets"`
 }
 
@@ -94,11 +100,20 @@ func Build(period Period, anchor time.Time, expenses []model.Expense) Result {
 		if !exists {
 			continue
 		}
-		result.Buckets[index].Amount += expense.Amount
-		result.Buckets[index].ExpenseCount++
-		result.TotalAmount += expense.Amount
-		result.ExpenseCount++
+		if expense.Type == model.TransactionTypeIncome {
+			result.Buckets[index].IncomeAmount += expense.Amount
+			result.Buckets[index].IncomeCount++
+			result.TotalIncome += expense.Amount
+			result.IncomeCount++
+		} else {
+			result.Buckets[index].ExpenseAmount += expense.Amount
+			result.Buckets[index].ExpenseCount++
+			result.TotalExpense += expense.Amount
+			result.ExpenseCount++
+		}
+		result.Buckets[index].Balance = result.Buckets[index].IncomeAmount - result.Buckets[index].ExpenseAmount
 	}
+	result.Balance = result.TotalIncome - result.TotalExpense
 	return result
 }
 
