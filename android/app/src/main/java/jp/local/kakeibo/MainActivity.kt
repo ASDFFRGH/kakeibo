@@ -7,6 +7,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -74,6 +77,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
@@ -84,6 +88,9 @@ import jp.local.kakeibo.data.CategoryEntity
 import jp.local.kakeibo.data.ExpenseEntity
 import jp.local.kakeibo.data.TransactionType
 import jp.local.kakeibo.expense.defaultExpenseDate
+import jp.local.kakeibo.expense.calendarDates
+import jp.local.kakeibo.expense.coerceDay
+import jp.local.kakeibo.expense.dailyTotals
 import jp.local.kakeibo.expense.monthlyExpenses
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -215,8 +222,10 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
     var summaryOpen by remember { mutableStateOf(false) }
     var trashOpen by remember { mutableStateOf(false) }
     var selectedMonthText by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
+    var selectedDateText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     var selectedCategoryUuid by rememberSaveable { mutableStateOf("") }
     val selectedMonth = YearMonth.parse(selectedMonthText)
+    val selectedDate = LocalDate.parse(selectedDateText)
     val snackbar = remember { SnackbarHostState() }
 
     LaunchedEffect(state.message) {
@@ -297,10 +306,18 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                 selectedMonth = selectedMonth,
                 selectedCategoryUuid = selectedCategoryUuid,
                 modifier = Modifier.padding(padding),
-                onMonthChange = { selectedMonthText = it.toString() },
+                onMonthChange = { month ->
+                    selectedMonthText = month.toString()
+                    selectedDateText = month.coerceDay(selectedDate.dayOfMonth).toString()
+                },
                 onCategoryChange = { selectedCategoryUuid = it },
                 onEdit = { editingExpense = it },
                 onDelete = viewModel::deleteExpense,
+                selectedDate = selectedDate,
+                onDateClick = { date ->
+                    selectedDateText = date.toString()
+                    expenseEditorOpen = true
+                },
             )
         }
     }
@@ -309,7 +326,7 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
         ExpenseEditor(
             current = editingExpense,
             categories = state.categories,
-            initialDate = selectedMonth.defaultExpenseDate(),
+            initialDate = selectedDate.takeIf { YearMonth.from(it) == selectedMonth } ?: selectedMonth.defaultExpenseDate(),
             initialCategoryUuid = selectedCategoryUuid,
             onClose = {
                 expenseEditorOpen = false
@@ -406,49 +423,20 @@ private fun TrashScreen(
 private fun ExpenseList(
     state: UiState,
     selectedMonth: YearMonth,
+    selectedDate: LocalDate,
     selectedCategoryUuid: String,
     modifier: Modifier = Modifier,
     onMonthChange: (YearMonth) -> Unit,
+    onDateClick: (LocalDate) -> Unit,
     onCategoryChange: (String) -> Unit,
     onEdit: (ExpenseEntity) -> Unit,
     onDelete: (ExpenseEntity) -> Unit,
 ) {
     val visibleExpenses =
         state.expenses.monthlyExpenses(selectedMonth, selectedCategoryUuid.ifEmpty { null })
-    val currentMonth = selectedMonth == YearMonth.now()
+    val selectedExpenses = visibleExpenses.filter { it.date == selectedDate.toString() }
 
     Column(modifier.fillMaxSize()) {
-        val totalExpense = visibleExpenses.filter { it.type != TransactionType.INCOME }.sumOf { it.amount }
-        val totalIncome = visibleExpenses.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
-        val balance = totalIncome - totalExpense
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-        ) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    if (currentMonth) "今月の収支" else "${selectedMonth.monthValue}月の収支",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Text(
-                    "差引 %,d円".format(balance),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("収入 +%,d円".format(totalIncome), color = incomeColor())
-                    Text("支出 -%,d円".format(totalExpense), color = expenseColor())
-                }
-                Text(
-                    "${visibleExpenses.size}件の記録",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
         ExpenseToolbar(
             selectedMonth = selectedMonth,
             categories = state.categories,
@@ -456,14 +444,31 @@ private fun ExpenseList(
             onMonthChange = onMonthChange,
             onCategoryChange = onCategoryChange,
         )
-        HorizontalDivider()
-        if (visibleExpenses.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("この月の収支はありません", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        MonthCalendar(
+            month = selectedMonth,
+            selectedDate = selectedDate,
+            expenses = visibleExpenses,
+            onDateClick = onDateClick,
+        )
+        MonthlyBalance(visibleExpenses)
+        Text(
+            selectedDate.format(DateTimeFormatter.ofPattern("M月d日（E）")),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        )
+        if (selectedExpenses.isEmpty()) {
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.TopCenter) {
+                Text(
+                    "この日の収支はありません\n日付をタップすると追加できます",
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(24.dp),
+                )
             }
         } else {
-            LazyColumn {
-                items(visibleExpenses, key = { it.uuid }) { expense ->
+            LazyColumn(Modifier.weight(1f)) {
+                items(selectedExpenses, key = { it.uuid }) { expense ->
                     ExpenseRow(
                         expense = expense,
                         categories = state.categories,
@@ -476,6 +481,85 @@ private fun ExpenseList(
         if (state.syncing) {
             LinearProgressIndicator(Modifier.fillMaxWidth())
         }
+    }
+}
+
+@Composable
+private fun MonthCalendar(
+    month: YearMonth,
+    selectedDate: LocalDate,
+    expenses: List<ExpenseEntity>,
+    onDateClick: (LocalDate) -> Unit,
+) {
+    val totals = remember(expenses) { dailyTotals(expenses) }
+    val dates = remember(month) { calendarDates(month) }
+    val weekDays = listOf("日", "月", "火", "水", "木", "金", "土")
+    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+        Row(Modifier.fillMaxWidth()) {
+            weekDays.forEachIndexed { index, label ->
+                Text(
+                    label,
+                    textAlign = TextAlign.Center,
+                    color = when (index) { 0 -> expenseColor(); 6 -> MaterialTheme.colorScheme.primary; else -> MaterialTheme.colorScheme.onSurfaceVariant },
+                    modifier = Modifier.weight(1f).padding(vertical = 6.dp),
+                )
+            }
+        }
+        dates.chunked(7).forEach { week ->
+            Row(Modifier.fillMaxWidth()) {
+                week.forEach { date ->
+                    if (date == null) {
+                        Spacer(Modifier.weight(1f).height(54.dp))
+                    } else {
+                        val dayTotal = totals[date]
+                        val selected = date == selectedDate
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(54.dp)
+                                .padding(1.dp)
+                                .then(
+                                    if (selected) Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(8.dp))
+                                    else Modifier,
+                                )
+                                .clickable { onDateClick(date) }
+                                .padding(horizontal = 3.dp, vertical = 2.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(date.dayOfMonth.toString(), style = MaterialTheme.typography.bodyMedium, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+                            dayTotal?.expense?.takeIf { it > 0 }?.let {
+                                Text("-¥%,d".format(it), color = expenseColor(), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                            }
+                            dayTotal?.income?.takeIf { it > 0 }?.let {
+                                Text("+¥%,d".format(it), color = incomeColor(), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonthlyBalance(expenses: List<ExpenseEntity>) {
+    val expense = expenses.filter { it.type != TransactionType.INCOME }.sumOf { it.amount }
+    val income = expenses.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceAround,
+    ) {
+        BalanceItem("収入", income, incomeColor())
+        BalanceItem("支出", expense, expenseColor())
+        BalanceItem("収支", income - expense, if (income >= expense) incomeColor() else expenseColor())
+    }
+}
+
+@Composable
+private fun BalanceItem(label: String, amount: Long, color: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("¥%,d".format(amount), color = color, fontWeight = FontWeight.Bold)
     }
 }
 
