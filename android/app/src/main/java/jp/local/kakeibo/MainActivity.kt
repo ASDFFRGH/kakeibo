@@ -5,6 +5,9 @@ import android.app.DatePickerDialog
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +35,9 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -165,18 +171,37 @@ class MainViewModel(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
         setContent { KakeiboTheme { KakeiboScreen() } }
     }
 }
 
 @Composable
 fun KakeiboTheme(content: @Composable () -> Unit) {
-    val colors =
+    val colors = if (isSystemInDarkTheme()) {
+        darkColorScheme(
+            primary = Color(0xFF82D5B1),
+            onPrimary = Color(0xFF003827),
+            primaryContainer = Color(0xFF00513A),
+            onPrimaryContainer = Color(0xFFA0F2CD),
+            background = Color(0xFF101512),
+            surface = Color(0xFF101512),
+            surfaceVariant = Color(0xFF3F4943),
+        )
+    } else {
         lightColorScheme(
             primary = Color(0xFF176B4D),
-            surface = Color.White,
-            background = Color(0xFFF4F6F5),
+            onPrimary = Color.White,
+            primaryContainer = Color(0xFFC1F1D9),
+            onPrimaryContainer = Color(0xFF002116),
+            background = Color(0xFFF5F8F6),
+            surface = Color(0xFFF9FCFA),
+            surfaceVariant = Color(0xFFDDE5DF),
         )
+    }
     MaterialTheme(colorScheme = colors, content = content)
 }
 
@@ -396,25 +421,33 @@ private fun ExpenseList(
         val totalExpense = visibleExpenses.filter { it.type != TransactionType.INCOME }.sumOf { it.amount }
         val totalIncome = visibleExpenses.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
         val balance = totalIncome - totalExpense
-        Column(Modifier.padding(20.dp, 16.dp)) {
-            Text(
-                if (currentMonth) "今月の収支" else "${selectedMonth.monthValue}月の収支",
-                style = MaterialTheme.typography.labelMedium,
-            )
-            Text(
-                "差引 %,d円".format(balance),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("収入 +%,d円".format(totalIncome), color = incomeColor())
-                Text("支出 -%,d円".format(totalExpense), color = expenseColor())
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        ) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    if (currentMonth) "今月の収支" else "${selectedMonth.monthValue}月の収支",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Text(
+                    "差引 %,d円".format(balance),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("収入 +%,d円".format(totalIncome), color = incomeColor())
+                    Text("支出 -%,d円".format(totalExpense), color = expenseColor())
+                }
+                Text(
+                    "${visibleExpenses.size}件の記録",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
             }
-            Text(
-                "${visibleExpenses.size}件",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
         ExpenseToolbar(
             selectedMonth = selectedMonth,
