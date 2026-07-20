@@ -9,6 +9,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,7 +26,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -45,8 +46,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,6 +55,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -61,7 +64,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -70,12 +72,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
@@ -95,11 +97,16 @@ import jp.local.kakeibo.expense.monthlyExpenses
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+
+private const val MONTH_PAGER_PAGE_COUNT = 2_401
+private const val MONTH_PAGER_INITIAL_PAGE = MONTH_PAGER_PAGE_COUNT / 2
 
 data class UiState(
     val expenses: List<ExpenseEntity> = emptyList(),
@@ -241,52 +248,59 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold) },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            summaryOpen = !summaryOpen
-                            if (summaryOpen) trashOpen = false
-                        },
-                    ) {
-                        if (summaryOpen) {
-                            Icon(Icons.AutoMirrored.Outlined.List, "収支一覧")
-                        } else {
-                            Icon(Icons.Outlined.BarChart, "サマリー")
-                        }
-                    }
-                    IconButton(
-                        onClick = {
-                            trashOpen = !trashOpen
-                            if (trashOpen) summaryOpen = false
-                        },
-                    ) {
-                        if (trashOpen) {
-                            Icon(Icons.AutoMirrored.Outlined.List, "収支一覧")
-                        } else {
-                            Icon(Icons.Outlined.Delete, "ゴミ箱")
-                        }
-                    }
-                    IconButton(onClick = { categoryEditorOpen = true }) {
-                        Icon(Icons.Outlined.Settings, "カテゴリ")
-                    }
-                    IconButton(enabled = !state.syncing, onClick = viewModel::sync) {
-                        Icon(Icons.Outlined.Sync, "同期")
-                    }
-                },
-            )
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(
+                    selected = !summaryOpen && !trashOpen,
+                    onClick = {
+                        summaryOpen = false
+                        trashOpen = false
+                    },
+                    icon = { Icon(Icons.Outlined.CalendarMonth, "カレンダー") },
+                    label = { Text("カレンダー") },
+                )
+                NavigationBarItem(
+                    selected = summaryOpen,
+                    onClick = {
+                        summaryOpen = true
+                        trashOpen = false
+                    },
+                    icon = { Icon(Icons.Outlined.BarChart, "サマリー") },
+                    label = { Text("サマリー") },
+                )
+                NavigationBarItem(
+                    selected = trashOpen,
+                    onClick = {
+                        trashOpen = true
+                        summaryOpen = false
+                    },
+                    icon = { Icon(Icons.Outlined.Delete, "ゴミ箱") },
+                    label = { Text("ゴミ箱") },
+                )
+                NavigationBarItem(
+                    selected = categoryEditorOpen,
+                    onClick = { categoryEditorOpen = true },
+                    icon = { Icon(Icons.Outlined.Settings, "カテゴリ") },
+                    label = { Text("カテゴリ") },
+                )
+                NavigationBarItem(
+                    selected = state.syncing,
+                    onClick = viewModel::sync,
+                    enabled = !state.syncing,
+                    icon = { Icon(Icons.Outlined.Sync, "同期") },
+                    label = { Text(if (state.syncing) "同期中" else "同期") },
+                )
+            }
         },
         floatingActionButton = {
             if (!summaryOpen && !trashOpen) {
-                ExtendedFloatingActionButton(
+                FloatingActionButton(
                     onClick = { expenseEditorOpen = true },
-                    icon = { Icon(Icons.Outlined.Add, null) },
-                    text = { Text("収支を追加") },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
-                )
+                ) {
+                    Icon(Icons.Outlined.Add, "収支を追加")
+                }
             }
         },
         snackbarHost = { SnackbarHost(snackbar) },
@@ -432,9 +446,32 @@ private fun ExpenseList(
     onEdit: (ExpenseEntity) -> Unit,
     onDelete: (ExpenseEntity) -> Unit,
 ) {
-    val visibleExpenses =
-        state.expenses.monthlyExpenses(selectedMonth, selectedCategoryUuid.ifEmpty { null })
-    val selectedExpenses = visibleExpenses.filter { it.date == selectedDate.toString() }
+    val pagerAnchorMonth = remember { selectedMonth }
+    val pagerState =
+        rememberPagerState(
+            initialPage = MONTH_PAGER_INITIAL_PAGE,
+            pageCount = { MONTH_PAGER_PAGE_COUNT },
+        )
+
+    LaunchedEffect(pagerState, pagerAnchorMonth) {
+        snapshotFlow { pagerState.settledPage }
+            .distinctUntilChanged()
+            .collect { page ->
+                val pageMonth =
+                    pagerAnchorMonth.plusMonths((page - MONTH_PAGER_INITIAL_PAGE).toLong())
+                onMonthChange(pageMonth)
+            }
+    }
+    LaunchedEffect(selectedMonth, pagerAnchorMonth) {
+        val monthOffset = ChronoUnit.MONTHS.between(pagerAnchorMonth, selectedMonth)
+        val targetPage = MONTH_PAGER_INITIAL_PAGE.toLong() + monthOffset
+        if (
+            targetPage in 0 until MONTH_PAGER_PAGE_COUNT.toLong() &&
+            pagerState.currentPage != targetPage.toInt()
+        ) {
+            pagerState.animateScrollToPage(targetPage.toInt())
+        }
+    }
 
     Column(modifier.fillMaxSize()) {
         ExpenseToolbar(
@@ -444,8 +481,43 @@ private fun ExpenseList(
             onMonthChange = onMonthChange,
             onCategoryChange = onCategoryChange,
         )
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            key = { it },
+        ) { page ->
+            val pageMonth =
+                pagerAnchorMonth.plusMonths((page - MONTH_PAGER_INITIAL_PAGE).toLong())
+            ExpenseMonthPage(
+                state = state,
+                month = pageMonth,
+                selectedDate = pageMonth.coerceDay(selectedDate.dayOfMonth),
+                selectedCategoryUuid = selectedCategoryUuid,
+                onDateClick = onDateClick,
+                onEdit = onEdit,
+                onDelete = onDelete,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExpenseMonthPage(
+    state: UiState,
+    month: YearMonth,
+    selectedDate: LocalDate,
+    selectedCategoryUuid: String,
+    onDateClick: (LocalDate) -> Unit,
+    onEdit: (ExpenseEntity) -> Unit,
+    onDelete: (ExpenseEntity) -> Unit,
+) {
+    val visibleExpenses =
+        state.expenses.monthlyExpenses(month, selectedCategoryUuid.ifEmpty { null })
+    val selectedExpenses = visibleExpenses.filter { it.date == selectedDate.toString() }
+
+    Column(Modifier.fillMaxSize()) {
         MonthCalendar(
-            month = selectedMonth,
+            month = month,
             selectedDate = selectedDate,
             expenses = visibleExpenses,
             onDateClick = onDateClick,
