@@ -44,7 +44,6 @@ import jp.local.kakeibo.summary.SummaryPeriod
 import jp.local.kakeibo.summary.SummaryResult
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -130,17 +129,39 @@ fun SummaryScreen(
             }
         } else {
             LazyColumn {
-                items(summary.buckets, key = { it.key }) { bucket ->
+                item {
+                    Text(
+                        "カテゴリ別",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                    )
+                }
+                items(summary.categories, key = { it.categoryUuid }) { categorySummary ->
+                    val category = categories.find { it.uuid == categorySummary.categoryUuid }
+                    val isIncome =
+                        category?.type == TransactionType.INCOME ||
+                            (
+                                category == null &&
+                                    categorySummary.incomeAmount > 0 &&
+                                    categorySummary.expenseAmount == 0L
+                            )
+                    val amount = if (isIncome) categorySummary.incomeAmount else categorySummary.expenseAmount
+                    val count = if (isIncome) categorySummary.incomeCount else categorySummary.expenseCount
                     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(bucketLabel(summary.period, bucket.from), fontWeight = FontWeight.Medium)
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("+%,d円  ${bucket.incomeCount}件".format(bucket.incomeAmount), color = incomeColor)
-                                Text("-%,d円  ${bucket.expenseCount}件".format(bucket.expenseAmount), color = MaterialTheme.colorScheme.error)
-                                Text("差引 %,d円".format(bucket.balance), fontWeight = FontWeight.Bold)
-                            }
+                            Text(
+                                category?.let(::summaryCategoryLabel) ?: "不明なカテゴリ",
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Text(
+                                "${if (isIncome) "+" else "-"}%,d円  ${count}件".format(amount),
+                                color = if (isIncome) incomeColor else MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.Bold,
+                            )
                         }
                     }
+                    HorizontalDivider(Modifier.padding(horizontal = 20.dp))
                 }
             }
         }
@@ -192,8 +213,6 @@ private fun SummaryTotal(summary: SummaryResult) {
 
 private fun periodLabel(summary: SummaryResult): String =
     when (summary.period) {
-        SummaryPeriod.DAY -> summary.anchorDate.format(DateTimeFormatter.ofPattern("yyyy年M月d日"))
-        SummaryPeriod.WEEK -> "${shortDate(summary.from)}〜${shortDate(summary.to)}"
         SummaryPeriod.MONTH -> summary.anchorDate.format(DateTimeFormatter.ofPattern("yyyy年M月"))
         SummaryPeriod.YEAR -> summary.anchorDate.format(DateTimeFormatter.ofPattern("yyyy年"))
     }
@@ -203,19 +222,7 @@ private fun dateRange(summary: SummaryResult): String =
         summary.from.toString()
     } else {
         "${summary.from}〜${summary.to}"
-    }
-
-private fun bucketLabel(
-    period: SummaryPeriod,
-    date: LocalDate,
-): String =
-    if (period == SummaryPeriod.YEAR) {
-        "${date.monthValue}月"
-    } else {
-        date.format(DateTimeFormatter.ofPattern("M/d（E）", Locale.JAPAN))
-    }
-
-private fun shortDate(date: LocalDate): String = date.format(DateTimeFormatter.ofPattern("M/d"))
+}
 
 private fun summaryCategoryLabel(category: CategoryEntity): String =
     "${if (category.type == TransactionType.INCOME) "収入" else "支出"}・${category.name}"

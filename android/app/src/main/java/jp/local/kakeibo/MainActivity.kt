@@ -42,7 +42,6 @@ import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Sync
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -69,7 +68,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.lightColorScheme
@@ -271,6 +269,18 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
         return
     }
 
+    if (categoryEditorOpen) {
+        val closeEditor = { categoryEditorOpen = false }
+        BackHandler(onBack = closeEditor)
+        CategoryEditorPage(
+            categories = state.categories,
+            onClose = closeEditor,
+            onSave = viewModel::saveCategory,
+            onDelete = viewModel::deleteCategory,
+        )
+        return
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -355,7 +365,7 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                 if (!summaryOpen && !trashOpen) {
                     ExtendedFloatingActionButton(
                         onClick = {
-                            initialExpenseDate = LocalDate.now()
+                            initialExpenseDate = selectedDate
                             expenseEditorOpen = true
                         },
                         icon = { Icon(Icons.Outlined.Add, null) },
@@ -396,22 +406,12 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                     selectedDate = selectedDate,
                     onDateClick = { date ->
                         selectedDateText = date.toString()
-                        initialExpenseDate = date
-                        expenseEditorOpen = true
                     },
                 )
             }
         }
     }
 
-    if (categoryEditorOpen) {
-        CategoryEditor(
-            categories = state.categories,
-            onClose = { categoryEditorOpen = false },
-            onSave = viewModel::saveCategory,
-            onDelete = viewModel::deleteCategory,
-        )
-    }
 }
 
 @Composable
@@ -575,7 +575,7 @@ private fun ExpenseMonthPage(
         if (selectedExpenses.isEmpty()) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.TopCenter) {
                 Text(
-                    "この日の収支はありません\n日付をタップすると追加できます",
+                    "この日の収支はありません\n収支を追加ボタンから登録できます",
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(24.dp),
@@ -917,8 +917,9 @@ private fun expenseColor(): Color = MaterialTheme.colorScheme.error
 private fun transactionLabel(type: String): String =
     if (type == TransactionType.INCOME) "収入" else "支出"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CategoryEditor(
+private fun CategoryEditorPage(
     categories: List<CategoryEntity>,
     onClose: () -> Unit,
     onSave: (CategoryEntity?, String, String) -> Unit,
@@ -929,71 +930,141 @@ private fun CategoryEditor(
     var editingCategory by remember { mutableStateOf<CategoryEntity?>(null) }
     val visibleCategories = categories.forTransactionType(type)
 
-    AlertDialog(
-        onDismissRequest = onClose,
-        title = { Text("カテゴリ管理") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = type == TransactionType.EXPENSE,
-                        enabled = editingCategory == null,
-                        onClick = {
-                            type = TransactionType.EXPENSE
-                            editingCategory = null
-                            name = ""
-                        },
-                        label = { Text("支出") },
-                    )
-                    FilterChip(
-                        selected = type == TransactionType.INCOME,
-                        enabled = editingCategory == null,
-                        onClick = {
-                            type = TransactionType.INCOME
-                            editingCategory = null
-                            name = ""
-                        },
-                        label = { Text("収入") },
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = { Text("カテゴリ名") },
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(
-                        enabled = name.isNotBlank(),
-                        onClick = {
-                            onSave(editingCategory, name, type)
-                            name = ""
-                            editingCategory = null
-                        },
-                    ) {
-                        val icon = if (editingCategory == null) Icons.Outlined.Add else Icons.Outlined.Check
-                        Icon(icon, "保存")
+    fun clearEditing() {
+        name = ""
+        editingCategory = null
+    }
+
+    Scaffold(
+        containerColor = Color.White,
+        topBar = {
+            TopAppBar(
+                title = { Text("カテゴリ管理", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.Outlined.Close, "カテゴリ管理を閉じる")
                     }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                ),
+            )
+        },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = type == TransactionType.EXPENSE,
+                    enabled = editingCategory == null,
+                    onClick = {
+                        type = TransactionType.EXPENSE
+                        clearEditing()
+                    },
+                    label = { Text("支出") },
+                )
+                FilterChip(
+                    selected = type == TransactionType.INCOME,
+                    enabled = editingCategory == null,
+                    onClick = {
+                        type = TransactionType.INCOME
+                        clearEditing()
+                    },
+                    label = { Text("収入") },
+                )
+            }
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text(if (editingCategory == null) "新しいカテゴリ名" else "カテゴリ名を編集") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                enabled = name.isNotBlank(),
+                onClick = {
+                    onSave(editingCategory, name.trim(), type)
+                    clearEditing()
+                },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) {
+                Icon(
+                    if (editingCategory == null) Icons.Outlined.Add else Icons.Outlined.Check,
+                    null,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(if (editingCategory == null) "カテゴリを追加" else "変更を保存")
+            }
+            if (editingCategory != null) {
+                OutlinedButton(
+                    onClick = ::clearEditing,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("編集をキャンセル")
                 }
-                visibleCategories.forEach { category ->
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(category.name, Modifier.weight(1f))
-                        IconButton(
-                            onClick = {
-                                editingCategory = category
-                                name = category.name
-                                type = category.type
+            }
+            HorizontalDivider()
+            Text(
+                "${transactionLabel(type)}カテゴリ",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            if (visibleCategories.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    Text(
+                        "${transactionLabel(type)}カテゴリはまだありません",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(24.dp),
+                    )
+                }
+            } else {
+                LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+                    items(visibleCategories, key = { it.uuid }) { category ->
+                        ListItem(
+                            headlineContent = { Text(category.name) },
+                            supportingContent = {
+                                if (editingCategory?.uuid == category.uuid) {
+                                    Text("編集中", color = MaterialTheme.colorScheme.primary)
+                                }
                             },
-                        ) {
-                            Icon(Icons.Outlined.Edit, "編集")
-                        }
-                        IconButton(onClick = { onDelete(category) }) {
-                            Icon(Icons.Outlined.Delete, "削除")
-                        }
+                            trailingContent = {
+                                Row {
+                                    IconButton(
+                                        onClick = {
+                                            editingCategory = category
+                                            name = category.name
+                                            type = category.type
+                                        },
+                                    ) {
+                                        Icon(Icons.Outlined.Edit, "${category.name}を編集")
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            onDelete(category)
+                                            if (editingCategory?.uuid == category.uuid) {
+                                                clearEditing()
+                                            }
+                                        },
+                                    ) {
+                                        Icon(Icons.Outlined.Delete, "${category.name}を削除")
+                                    }
+                                }
+                            },
+                        )
+                        HorizontalDivider()
                     }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = onClose) { Text("閉じる") } },
-    )
+        }
+    }
 }
