@@ -23,3 +23,6 @@ fun List<CategoryEntity>.orderedByExpenseFrequency(
             .thenBy { originalPositions.getValue(it.uuid) },
     )
 }
+
+fun List<CategoryEntity>.forTransactionType(type: String): List<CategoryEntity> =
+    filter { it.type == type }

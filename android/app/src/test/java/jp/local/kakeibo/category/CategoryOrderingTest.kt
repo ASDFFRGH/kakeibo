@@ -2,6 +2,7 @@ package jp.local.kakeibo.category
 
 import jp.local.kakeibo.data.CategoryEntity
 import jp.local.kakeibo.data.ExpenseEntity
+import jp.local.kakeibo.data.TransactionType
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -42,12 +43,32 @@ class CategoryOrderingTest {
         assertEquals(listOf("daily", "food", "travel"), result.map { it.uuid })
     }
 
+    @Test
+    fun `categories are filtered by transaction type`() {
+        val categories =
+            listOf(
+                category("food", "食費"),
+                category("salary", "給与", TransactionType.INCOME),
+            )
+
+        assertEquals(
+            listOf("food"),
+            categories.forTransactionType(TransactionType.EXPENSE).map { it.uuid },
+        )
+        assertEquals(
+            listOf("salary"),
+            categories.forTransactionType(TransactionType.INCOME).map { it.uuid },
+        )
+    }
+
     private fun category(
         uuid: String,
         name: String,
+        type: String = TransactionType.EXPENSE,
     ) = CategoryEntity(
         uuid = uuid,
         name = name,
+        type = type,
         createdAt = "2026-07-15T00:00:00Z",
         updatedAt = "2026-07-15T00:00:00Z",
     )

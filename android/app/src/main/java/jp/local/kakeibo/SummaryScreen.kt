@@ -12,6 +12,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -19,6 +23,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,7 +36,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import jp.local.kakeibo.data.CategoryEntity
 import jp.local.kakeibo.data.ExpenseEntity
+import jp.local.kakeibo.data.TransactionType
 import jp.local.kakeibo.summary.SummaryCalculator
 import jp.local.kakeibo.summary.SummaryPeriod
 import jp.local.kakeibo.summary.SummaryResult
@@ -38,14 +46,24 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SummaryScreen(
     expenses: List<ExpenseEntity>,
+    categories: List<CategoryEntity>,
+    selectedCategoryUuid: String,
+    onCategoryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var period by remember { mutableStateOf(SummaryPeriod.MONTH) }
     var anchorDate by remember { mutableStateOf(LocalDate.now()) }
-    val summary = remember(period, anchorDate, expenses) { SummaryCalculator.calculate(period, anchorDate, expenses) }
+    var categoryMenuOpen by remember { mutableStateOf(false) }
+    val visibleExpenses = remember(expenses, selectedCategoryUuid) {
+        expenses.filter { selectedCategoryUuid.isEmpty() || it.categoryUuid == selectedCategoryUuid }
+    }
+    val summary = remember(period, anchorDate, visibleExpenses) {
+        SummaryCalculator.calculate(period, anchorDate, visibleExpenses)
+    }
 
     Column(modifier.fillMaxSize()) {
         Row(
@@ -58,6 +76,42 @@ fun SummaryScreen(
                     onClick = { period = option },
                     label = { Text(option.displayName) },
                 )
+            }
+        }
+        ExposedDropdownMenuBox(
+            expanded = categoryMenuOpen,
+            onExpandedChange = { categoryMenuOpen = !categoryMenuOpen },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        ) {
+            val selectedCategory = categories.find { it.uuid == selectedCategoryUuid }
+            OutlinedTextField(
+                value = selectedCategory?.let(::summaryCategoryLabel) ?: "すべてのカテゴリ",
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("カテゴリで絞り込み") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(categoryMenuOpen) },
+                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+            )
+            ExposedDropdownMenu(
+                expanded = categoryMenuOpen,
+                onDismissRequest = { categoryMenuOpen = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("すべてのカテゴリ") },
+                    onClick = {
+                        onCategoryChange("")
+                        categoryMenuOpen = false
+                    },
+                )
+                categories.forEach { category ->
+                    DropdownMenuItem(
+                        text = { Text(summaryCategoryLabel(category)) },
+                        onClick = {
+                            onCategoryChange(category.uuid)
+                            categoryMenuOpen = false
+                        },
+                    )
+                }
             }
         }
         PeriodNavigator(
@@ -162,5 +216,8 @@ private fun bucketLabel(
     }
 
 private fun shortDate(date: LocalDate): String = date.format(DateTimeFormatter.ofPattern("M/d"))
+
+private fun summaryCategoryLabel(category: CategoryEntity): String =
+    "${if (category.type == TransactionType.INCOME) "収入" else "支出"}・${category.name}"
 
 private val incomeColor = Color(0xFF176B4D)

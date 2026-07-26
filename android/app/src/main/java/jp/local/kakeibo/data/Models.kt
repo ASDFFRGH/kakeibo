@@ -27,6 +27,10 @@ data class CategoryEntity(
     val uuid: String,
     @field:Expose
     val name: String,
+    @ColumnInfo(name = "transaction_type", defaultValue = "'expense'")
+    @field:Expose
+    @SerializedName("type")
+    val type: String = TransactionType.EXPENSE,
     @ColumnInfo(name = "created_at")
     @field:Expose
     @SerializedName("created_at")
@@ -158,7 +162,7 @@ interface ExpenseDao {
 
 @Database(
     entities = [CategoryEntity::class, ExpenseEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -172,6 +176,30 @@ abstract class AppDatabase : RoomDatabase() {
                 override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                     db.execSQL(
                         "ALTER TABLE expenses ADD COLUMN transaction_type TEXT NOT NULL DEFAULT 'expense'",
+                    )
+                }
+            }
+
+        val MIGRATION_2_3 =
+            object : Migration(2, 3) {
+                override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "ALTER TABLE categories ADD COLUMN transaction_type TEXT NOT NULL DEFAULT 'expense'",
+                    )
+                    db.execSQL(
+                        """
+                        INSERT OR IGNORE INTO categories(
+                            uuid, name, transaction_type, created_at, updated_at, deleted_at, is_synced
+                        ) VALUES(
+                            '10000000-0000-4000-8000-000000000004',
+                            '給与',
+                            'income',
+                            strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                            strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                            NULL,
+                            0
+                        )
+                        """.trimIndent(),
                     )
                 }
             }
