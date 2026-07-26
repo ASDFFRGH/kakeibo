@@ -42,6 +42,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.ShowChart
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -240,8 +241,9 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
     var editingExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
     var expenseEditorOpen by remember { mutableStateOf(false) }
     var categoryEditorOpen by remember { mutableStateOf(false) }
-    var summaryOpen by remember { mutableStateOf(false) }
-    var trashOpen by remember { mutableStateOf(false) }
+    var summaryOpen by rememberSaveable { mutableStateOf(false) }
+    var graphOpen by rememberSaveable { mutableStateOf(false) }
+    var trashOpen by rememberSaveable { mutableStateOf(false) }
     var initialExpenseDate by remember { mutableStateOf(LocalDate.now()) }
     var selectedMonthText by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     var selectedDateText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
@@ -310,10 +312,11 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                 )
                 NavigationDrawerItem(
                     label = { Text("カレンダー") },
-                    selected = !summaryOpen && !trashOpen,
+                    selected = !summaryOpen && !graphOpen && !trashOpen,
                     icon = { Icon(Icons.Outlined.CalendarMonth, null) },
                     onClick = {
                         summaryOpen = false
+                        graphOpen = false
                         trashOpen = false
                         scope.launch { drawerState.close() }
                     },
@@ -324,6 +327,18 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                     icon = { Icon(Icons.Outlined.BarChart, null) },
                     onClick = {
                         summaryOpen = true
+                        graphOpen = false
+                        trashOpen = false
+                        scope.launch { drawerState.close() }
+                    },
+                )
+                NavigationDrawerItem(
+                    label = { Text("グラフ") },
+                    selected = graphOpen,
+                    icon = { Icon(Icons.Outlined.ShowChart, null) },
+                    onClick = {
+                        graphOpen = true
+                        summaryOpen = false
                         trashOpen = false
                         scope.launch { drawerState.close() }
                     },
@@ -344,6 +359,7 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                     onClick = {
                         trashOpen = true
                         summaryOpen = false
+                        graphOpen = false
                         scope.launch { drawerState.close() }
                     },
                 )
@@ -370,6 +386,7 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                             when {
                                 trashOpen -> Text("ゴミ箱", fontWeight = FontWeight.Bold)
                                 summaryOpen -> Text("サマリー", fontWeight = FontWeight.Bold)
+                                graphOpen -> Text("グラフ", fontWeight = FontWeight.Bold)
                             }
                         },
                         navigationIcon = {
@@ -385,7 +402,7 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                 }
             },
             floatingActionButton = {
-                if (!summaryOpen && !trashOpen) {
+                if (!summaryOpen && !graphOpen && !trashOpen) {
                     ExtendedFloatingActionButton(
                         onClick = {
                             initialExpenseDate = selectedDate
@@ -413,6 +430,12 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                     categories = state.categories,
                     selectedCategoryUuid = selectedSummaryCategoryUuid,
                     onCategoryChange = { selectedSummaryCategoryUuid = it },
+                    modifier = Modifier.padding(padding),
+                )
+            } else if (graphOpen) {
+                MonthlyGraphScreen(
+                    expenses = state.expenses,
+                    categories = state.categories,
                     modifier = Modifier.padding(padding),
                 )
             } else {
