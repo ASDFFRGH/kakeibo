@@ -2,10 +2,10 @@
     <style name="Theme.Kakeibo" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#176B4D</item>
-        <item name="android:windowBackground">#FFFFFF</item>
-        <item name="android:colorBackground">#FFFFFF</item>
-        <item name="android:navigationBarColor">#FFFFFF</item>
-        <item name="android:statusBarColor">#FFFFFF</item>
+        <item name="android:windowBackground">#F3F7F4</item>
+        <item name="android:colorBackground">#F3F7F4</item>
+        <item name="android:navigationBarColor">#F3F7F4</item>
+        <item name="android:statusBarColor">#F3F7F4</item>
         <item name="android:windowLightNavigationBar">true</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowActionModeOverlay">true</item>

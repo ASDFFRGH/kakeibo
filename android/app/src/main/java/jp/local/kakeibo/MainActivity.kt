@@ -7,6 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
@@ -209,11 +210,25 @@ fun KakeiboTheme(content: @Composable () -> Unit) {
     val colors = lightColorScheme(
         primary = Color(0xFF176B4D),
         onPrimary = Color.White,
-        primaryContainer = Color(0xFFC1F1D9),
-        onPrimaryContainer = Color(0xFF002116),
-        background = Color.White,
+        primaryContainer = Color(0xFFCDEBDD),
+        onPrimaryContainer = Color(0xFF073B2A),
+        secondary = Color(0xFF815512),
+        onSecondary = Color.White,
+        secondaryContainer = Color(0xFFF8E8C8),
+        onSecondaryContainer = Color(0xFF342504),
+        tertiary = Color(0xFF5E5A8B),
+        onTertiary = Color.White,
+        tertiaryContainer = Color(0xFFE6E3F4),
+        onTertiaryContainer = Color(0xFF29264D),
+        background = Color(0xFFF3F7F4),
+        onBackground = Color(0xFF18201B),
         surface = Color.White,
-        surfaceVariant = Color(0xFFDDE5DF),
+        onSurface = Color(0xFF18201B),
+        surfaceVariant = Color(0xFFE4ECE7),
+        onSurfaceVariant = Color(0xFF46534B),
+        outline = Color(0xFF738178),
+        outlineVariant = Color(0xFFC7D2CB),
+        error = Color(0xFFBA1A1A),
     )
     MaterialTheme(colorScheme = colors, content = content)
 }
@@ -284,7 +299,9 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
+            ModalDrawerSheet(
+                drawerContainerColor = MaterialTheme.colorScheme.surface,
+            ) {
                 Text(
                     stringResource(R.string.app_name),
                     style = MaterialTheme.typography.titleLarge,
@@ -345,21 +362,27 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
         },
     ) {
         Scaffold(
-            containerColor = Color.White,
+            containerColor = MaterialTheme.colorScheme.background,
             topBar = {
-                TopAppBar(
-                    title = {
-                        when {
-                            trashOpen -> Text("ゴミ箱", fontWeight = FontWeight.Bold)
-                            summaryOpen -> Text("サマリー", fontWeight = FontWeight.Bold)
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Outlined.Menu, "メニューを開く")
-                        }
-                    },
-                )
+                Column {
+                    TopAppBar(
+                        title = {
+                            when {
+                                trashOpen -> Text("ゴミ箱", fontWeight = FontWeight.Bold)
+                                summaryOpen -> Text("サマリー", fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                Icon(Icons.Outlined.Menu, "メニューを開く")
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                        ),
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                }
             },
             floatingActionButton = {
                 if (!summaryOpen && !trashOpen) {
@@ -423,7 +446,12 @@ private fun TrashScreen(
 ) {
     val allCategories = state.categories + state.deletedCategories
 
-    LazyColumn(modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+    LazyColumn(
+        modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 16.dp),
+    ) {
         item {
             Text(
                 "ゴミ箱",
@@ -522,11 +550,14 @@ private fun ExpenseList(
         }
     }
 
-    Column(modifier.fillMaxSize()) {
-        ExpenseToolbar(
-            selectedMonth = selectedMonth,
-            onMonthChange = onMonthChange,
-        )
+    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Column(Modifier.background(MaterialTheme.colorScheme.surface)) {
+            ExpenseToolbar(
+                selectedMonth = selectedMonth,
+                onMonthChange = onMonthChange,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
@@ -558,31 +589,50 @@ private fun ExpenseMonthPage(
     val visibleExpenses = state.expenses.monthlyExpenses(month)
     val selectedExpenses = visibleExpenses.filter { it.date == selectedDate.toString() }
 
-    Column(Modifier.fillMaxSize()) {
-        MonthCalendar(
-            month = month,
-            selectedDate = selectedDate,
-            expenses = visibleExpenses,
-            onDateClick = onDateClick,
-        )
-        MonthlyBalance(visibleExpenses)
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            MonthCalendar(
+                month = month,
+                selectedDate = selectedDate,
+                expenses = visibleExpenses,
+                onDateClick = onDateClick,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            MonthlyBalance(visibleExpenses)
+        }
         Text(
             selectedDate.format(DateTimeFormatter.ofPattern("M月d日（E）")),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.secondaryContainer)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
         )
         if (selectedExpenses.isEmpty()) {
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.TopCenter) {
-                Text(
-                    "この日の収支はありません\n収支を追加ボタンから登録できます",
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(24.dp),
-                )
+            Card(
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(12.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                    Text(
+                        "この日の収支はありません\n収支を追加ボタンから登録できます",
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(24.dp),
+                    )
+                }
             }
         } else {
-            LazyColumn(Modifier.weight(1f)) {
+            LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 8.dp)) {
                 items(selectedExpenses, key = { it.uuid }) { expense ->
                     ExpenseRow(
                         expense = expense,
@@ -661,7 +711,10 @@ private fun MonthlyBalance(expenses: List<ExpenseEntity>) {
     val expense = expenses.filter { it.type != TransactionType.INCOME }.sumOf { it.amount }
     val income = expenses.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.secondaryContainer)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceAround,
     ) {
         BalanceItem("収入", income, incomeColor())
@@ -713,25 +766,31 @@ private fun ExpenseRow(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    ListItem(
-        headlineContent = { Text(expense.memo.ifBlank { transactionLabel(expense.type) }) },
-        supportingContent = {
-            val categoryName = categories.find { it.uuid == expense.categoryUuid }?.name ?: "未分類"
-            Text("${expense.date}  $categoryName")
-        },
-        trailingContent = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "%s%,d円".format(if (expense.type == TransactionType.INCOME) "+" else "-", expense.amount),
-                    color = if (expense.type == TransactionType.INCOME) incomeColor() else expenseColor(),
-                    fontWeight = FontWeight.Bold,
-                )
-                IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, "編集") }
-                IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, "削除") }
-            }
-        },
-    )
-    HorizontalDivider()
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        ListItem(
+            headlineContent = { Text(expense.memo.ifBlank { transactionLabel(expense.type) }) },
+            supportingContent = {
+                val categoryName = categories.find { it.uuid == expense.categoryUuid }?.name ?: "未分類"
+                Text("${expense.date}  $categoryName")
+            },
+            trailingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "%s%,d円".format(if (expense.type == TransactionType.INCOME) "+" else "-", expense.amount),
+                        color = if (expense.type == TransactionType.INCOME) incomeColor() else expenseColor(),
+                        fontWeight = FontWeight.Bold,
+                    )
+                    IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, "編集") }
+                    IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, "削除") }
+                }
+            },
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -764,7 +823,7 @@ private fun ExpenseEditorPage(
     val context = LocalContext.current
 
     Scaffold(
-        containerColor = Color.White,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
@@ -936,7 +995,7 @@ private fun CategoryEditorPage(
     }
 
     Scaffold(
-        containerColor = Color.White,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text("カテゴリ管理", fontWeight = FontWeight.Bold) },
@@ -1010,7 +1069,6 @@ private fun CategoryEditorPage(
                     Text("編集をキャンセル")
                 }
             }
-            HorizontalDivider()
             Text(
                 "${transactionLabel(type)}カテゴリ",
                 style = MaterialTheme.typography.titleMedium,
@@ -1030,38 +1088,44 @@ private fun CategoryEditorPage(
             } else {
                 LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
                     items(visibleCategories, key = { it.uuid }) { category ->
-                        ListItem(
-                            headlineContent = { Text(category.name) },
-                            supportingContent = {
-                                if (editingCategory?.uuid == category.uuid) {
-                                    Text("編集中", color = MaterialTheme.colorScheme.primary)
-                                }
-                            },
-                            trailingContent = {
-                                Row {
-                                    IconButton(
-                                        onClick = {
-                                            editingCategory = category
-                                            name = category.name
-                                            type = category.type
-                                        },
-                                    ) {
-                                        Icon(Icons.Outlined.Edit, "${category.name}を編集")
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        ) {
+                            ListItem(
+                                headlineContent = { Text(category.name) },
+                                supportingContent = {
+                                    if (editingCategory?.uuid == category.uuid) {
+                                        Text("編集中", color = MaterialTheme.colorScheme.primary)
                                     }
-                                    IconButton(
-                                        onClick = {
-                                            onDelete(category)
-                                            if (editingCategory?.uuid == category.uuid) {
-                                                clearEditing()
-                                            }
-                                        },
-                                    ) {
-                                        Icon(Icons.Outlined.Delete, "${category.name}を削除")
+                                },
+                                trailingContent = {
+                                    Row {
+                                        IconButton(
+                                            onClick = {
+                                                editingCategory = category
+                                                name = category.name
+                                                type = category.type
+                                            },
+                                        ) {
+                                            Icon(Icons.Outlined.Edit, "${category.name}を編集")
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                onDelete(category)
+                                                if (editingCategory?.uuid == category.uuid) {
+                                                    clearEditing()
+                                                }
+                                            },
+                                        ) {
+                                            Icon(Icons.Outlined.Delete, "${category.name}を削除")
+                                        }
                                     }
-                                }
-                            },
-                        )
-                        HorizontalDivider()
+                                },
+                            )
+                        }
                     }
                 }
             }

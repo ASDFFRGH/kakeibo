@@ -1,5 +1,7 @@
 package jp.local.kakeibo
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,7 +21,6 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -64,7 +65,7 @@ fun SummaryScreen(
         SummaryCalculator.calculate(period, anchorDate, visibleExpenses)
     }
 
-    Column(modifier.fillMaxSize()) {
+    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -119,22 +120,35 @@ fun SummaryScreen(
             onNext = { anchorDate = period.shift(anchorDate, 1) },
         )
         SummaryTotal(summary)
-        HorizontalDivider()
         if (summary.expenseCount + summary.incomeCount == 0) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             ) {
-                Text("この期間の収支はありません", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("この期間の収支はありません", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         } else {
-            LazyColumn {
+            LazyColumn(Modifier.padding(horizontal = 12.dp)) {
                 item {
                     Text(
                         "カテゴリ別",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme.colorScheme.secondaryContainer,
+                                RoundedCornerShape(12.dp),
+                            )
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
                     )
                 }
                 items(summary.categories, key = { it.categoryUuid }) { categorySummary ->
@@ -148,8 +162,13 @@ fun SummaryScreen(
                             )
                     val amount = if (isIncome) categorySummary.incomeAmount else categorySummary.expenseAmount
                     val count = if (isIncome) categorySummary.incomeCount else categorySummary.expenseCount
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
                             Text(
                                 category?.let(::summaryCategoryLabel) ?: "不明なカテゴリ",
                                 fontWeight = FontWeight.Medium,
@@ -158,10 +177,10 @@ fun SummaryScreen(
                                 "${if (isIncome) "+" else "-"}%,d円  ${count}件".format(amount),
                                 color = if (isIncome) incomeColor else MaterialTheme.colorScheme.error,
                                 fontWeight = FontWeight.Bold,
+                                modifier = Modifier.align(Alignment.End),
                             )
                         }
                     }
-                    HorizontalDivider(Modifier.padding(horizontal = 20.dp))
                 }
             }
         }
@@ -174,14 +193,21 @@ private fun PeriodNavigator(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        IconButton(onClick = onPrevious) { Icon(Icons.Outlined.ChevronLeft, "前の期間") }
-        Text(periodLabel(summary), fontWeight = FontWeight.Bold)
-        IconButton(onClick = onNext) { Icon(Icons.Outlined.ChevronRight, "次の期間") }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            IconButton(onClick = onPrevious) { Icon(Icons.Outlined.ChevronLeft, "前の期間") }
+            Text(periodLabel(summary), fontWeight = FontWeight.Bold)
+            IconButton(onClick = onNext) { Icon(Icons.Outlined.ChevronRight, "次の期間") }
+        }
     }
 }
 
@@ -191,6 +217,7 @@ private fun SummaryTotal(summary: SummaryResult) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
     ) {
         Column(Modifier.fillMaxWidth().padding(20.dp)) {
             Text("期間の差引", style = MaterialTheme.typography.labelLarge)
