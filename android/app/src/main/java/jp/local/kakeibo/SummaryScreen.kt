@@ -162,15 +162,37 @@ fun SummaryScreen(
                             )
                     val amount = if (isIncome) categorySummary.incomeAmount else categorySummary.expenseAmount
                     val count = if (isIncome) categorySummary.incomeCount else categorySummary.expenseCount
+                    val tileColor =
+                        if (isIncome) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.errorContainer
+                        }
+                    val tileContentColor =
+                        if (isIncome) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        }
+                    val tileBorderColor =
+                        if (isIncome) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        }
                     Card(
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor = tileColor,
+                                contentColor = tileContentColor,
+                            ),
+                        border = BorderStroke(1.dp, tileBorderColor),
                     ) {
                         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
                             Text(
-                                category?.let(::summaryCategoryLabel) ?: "不明なカテゴリ",
+                                category?.name ?: "不明なカテゴリ",
                                 fontWeight = FontWeight.Medium,
                             )
                             Text(

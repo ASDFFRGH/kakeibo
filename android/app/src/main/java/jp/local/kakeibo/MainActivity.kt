@@ -8,9 +8,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -18,12 +20,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -44,6 +48,7 @@ import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ShowChart
 import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -70,6 +75,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.lightColorScheme
@@ -84,16 +90,21 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -697,14 +708,14 @@ private fun MonthCalendar(
             Row(Modifier.fillMaxWidth()) {
                 week.forEach { date ->
                     if (date == null) {
-                        Spacer(Modifier.weight(1f).height(54.dp))
+                        Spacer(Modifier.weight(1f).height(64.dp))
                     } else {
                         val dayTotal = totals[date]
                         val selected = date == selectedDate
                         Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(54.dp)
+                                .heightIn(min = 64.dp)
                                 .padding(1.dp)
                                 .then(
                                     if (selected) Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(8.dp))
@@ -716,16 +727,55 @@ private fun MonthCalendar(
                         ) {
                             Text(date.dayOfMonth.toString(), style = MaterialTheme.typography.bodyMedium, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
                             dayTotal?.expense?.takeIf { it > 0 }?.let {
-                                Text("-¥%,d".format(it), color = expenseColor(), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                CalendarAmountText("-¥%,d".format(it), expenseColor())
                             }
                             dayTotal?.income?.takeIf { it > 0 }?.let {
-                                Text("+¥%,d".format(it), color = incomeColor(), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                CalendarAmountText("+¥%,d".format(it), incomeColor())
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CalendarAmountText(
+    text: String,
+    color: Color,
+) {
+    val textMeasurer = rememberTextMeasurer()
+    val baseStyle = MaterialTheme.typography.labelSmall
+
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val availableWidth = constraints.maxWidth
+        val fittedFontSize = remember(text, availableWidth, baseStyle) {
+            val preferredSize = baseStyle.fontSize.value
+            val measuredWidth =
+                textMeasurer.measure(
+                    text = text,
+                    style = baseStyle,
+                    maxLines = 1,
+                    softWrap = false,
+                ).size.width
+
+            if (availableWidth <= 0 || measuredWidth <= availableWidth) {
+                baseStyle.fontSize
+            } else {
+                (preferredSize * availableWidth / measuredWidth * 0.98f).sp
+            }
+        }
+
+        Text(
+            text = text,
+            color = color,
+            style = baseStyle.copy(fontSize = fittedFontSize),
+            maxLines = 1,
+            softWrap = false,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -844,6 +894,13 @@ private fun ExpenseEditorPage(
     var memo by remember { mutableStateOf(current?.memo.orEmpty()) }
     var categoryMenuOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val amountFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(amountFocusRequester) {
+        amountFocusRequester.requestFocus()
+        keyboardController?.show()
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -903,7 +960,7 @@ private fun ExpenseEditorPage(
                     label = { Text("金額") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).focusRequester(amountFocusRequester),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     FilterChip(
@@ -999,7 +1056,7 @@ private fun expenseColor(): Color = MaterialTheme.colorScheme.error
 private fun transactionLabel(type: String): String =
     if (type == TransactionType.INCOME) "収入" else "支出"
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun CategoryEditorPage(
     categories: List<CategoryEntity>,
@@ -1010,6 +1067,7 @@ private fun CategoryEditorPage(
     var name by remember { mutableStateOf("") }
     var type by remember { mutableStateOf(TransactionType.EXPENSE) }
     var editingCategory by remember { mutableStateOf<CategoryEntity?>(null) }
+    var categoryPendingDeletion by remember { mutableStateOf<CategoryEntity?>(null) }
     val visibleCategories = categories.forTransactionType(type)
 
     fun clearEditing() {
@@ -1112,7 +1170,14 @@ private fun CategoryEditorPage(
                 LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
                     items(visibleCategories, key = { it.uuid }) { category ->
                         Card(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                                .combinedClickable(
+                                    onClick = {},
+                                    onLongClickLabel = "${category.name}を削除",
+                                    onLongClick = { categoryPendingDeletion = category },
+                                ),
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -1135,16 +1200,6 @@ private fun CategoryEditorPage(
                                         ) {
                                             Icon(Icons.Outlined.Edit, "${category.name}を編集")
                                         }
-                                        IconButton(
-                                            onClick = {
-                                                onDelete(category)
-                                                if (editingCategory?.uuid == category.uuid) {
-                                                    clearEditing()
-                                                }
-                                            },
-                                        ) {
-                                            Icon(Icons.Outlined.Delete, "${category.name}を削除")
-                                        }
                                     }
                                 },
                             )
@@ -1153,5 +1208,31 @@ private fun CategoryEditorPage(
                 }
             }
         }
+    }
+
+    categoryPendingDeletion?.let { category ->
+        AlertDialog(
+            onDismissRequest = { categoryPendingDeletion = null },
+            title = { Text("カテゴリの削除") },
+            text = { Text("「${category.name}」を削除しますか？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDelete(category)
+                        if (editingCategory?.uuid == category.uuid) {
+                            clearEditing()
+                        }
+                        categoryPendingDeletion = null
+                    },
+                ) {
+                    Text("Yes")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { categoryPendingDeletion = null }) {
+                    Text("No")
+                }
+            },
+        )
     }
 }
