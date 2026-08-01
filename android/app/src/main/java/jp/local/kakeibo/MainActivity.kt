@@ -1,6 +1,7 @@
 package jp.local.kakeibo
 
 import android.app.Application
+import android.app.Activity
 import android.app.DatePickerDialog
 import android.os.Bundle
 import android.util.Log
@@ -99,6 +100,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -110,6 +112,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.view.WindowCompat
 import jp.local.kakeibo.category.orderedByExpenseFrequency
 import jp.local.kakeibo.category.forTransactionType
 import jp.local.kakeibo.data.CategoryEntity
@@ -270,6 +273,12 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
     val snackbar = remember { SnackbarHostState() }
     val drawerState = androidx.compose.material3.rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val view = LocalView.current
+
+    LaunchedEffect(summaryOpen, view) {
+        val window = (view.context as? Activity)?.window ?: return@LaunchedEffect
+        WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !summaryOpen
+    }
 
     LaunchedEffect(state.message) {
         state.message?.let {
@@ -407,7 +416,7 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                         title = {
                             when {
                                 trashOpen -> Text("ゴミ箱", fontWeight = FontWeight.Bold)
-                                summaryOpen -> Text("サマリー", fontWeight = FontWeight.Bold)
+                                summaryOpen -> Text("レポート", fontWeight = FontWeight.Bold)
                                 graphOpen -> Text("グラフ", fontWeight = FontWeight.Bold)
                             }
                         },
@@ -417,7 +426,24 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
+                            containerColor =
+                                if (summaryOpen) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.surface
+                                },
+                            titleContentColor =
+                                if (summaryOpen) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                            navigationIconContentColor =
+                                if (summaryOpen) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
                         ),
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

@@ -10,6 +10,7 @@ const (
 type Category struct {
 	UUID      string     `json:"uuid"`
 	Name      string     `json:"name"`
+	Type      string     `json:"type"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
 	DeletedAt *time.Time `json:"deleted_at"`

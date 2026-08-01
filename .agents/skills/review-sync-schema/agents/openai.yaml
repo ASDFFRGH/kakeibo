@@ -1,0 +1,4 @@
+interface:
+  display_name: "同期スキーマ整合性レビュー"
+  short_description: "Android・API・DB間の同期契約と移行経路を横断レビュー"
+  default_prompt: "Use $review-sync-schema to review Android, backend, and PostgreSQL sync compatibility before release."
