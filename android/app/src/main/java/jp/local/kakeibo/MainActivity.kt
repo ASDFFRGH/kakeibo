@@ -585,6 +585,7 @@ private fun TrashScreen(
             items(state.deletedCategories, key = { "category-${it.uuid}" }) { category ->
                 ListItem(
                     headlineContent = { Text(category.name) },
+                    supportingContent = { Text("${transactionLabel(category.type)}カテゴリ") },
                     trailingContent = {
                         IconButton(onClick = { onRestoreCategory(category) }) {
                             Icon(Icons.Outlined.Restore, "カテゴリを復元")
@@ -1350,9 +1351,18 @@ private fun CategoryEditorPage(
                             ListItem(
                                 headlineContent = { Text(category.name) },
                                 supportingContent = {
-                                    if (editingCategory?.uuid == category.uuid) {
-                                        Text("編集中", color = MaterialTheme.colorScheme.primary)
-                                    }
+                                    Text(
+                                        if (editingCategory?.uuid == category.uuid) {
+                                            "${transactionLabel(category.type)}カテゴリ・編集中"
+                                        } else {
+                                            "${transactionLabel(category.type)}カテゴリ"
+                                        },
+                                        color = if (editingCategory?.uuid == category.uuid) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                    )
                                 },
                                 trailingContent = {
                                     Row {

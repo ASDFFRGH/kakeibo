@@ -74,6 +74,424 @@ header > a {
   color: #26332e;
   border: 1px solid #ccd5d1;
 }
+.calendar-page {
+  max-width: 980px;
+  padding-bottom: 120px;
+}
+.app-topbar {
+  position: relative;
+  justify-content: center;
+  background: white;
+}
+.app-topbar > button {
+  position: absolute;
+}
+.app-topbar > button:first-child {
+  left: 0;
+}
+.app-topbar > button:last-child {
+  right: 0;
+}
+.menu-button {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #18201b;
+}
+.nav-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(18, 25, 21, 0.42);
+}
+.app-drawer {
+  width: min(360px, 88vw);
+  height: 100%;
+  padding: 28px 18px;
+  background: white;
+  box-shadow: 14px 0 36px rgba(0, 0, 0, 0.16);
+}
+.app-drawer h1 {
+  margin: 0 18px 32px;
+  font-size: 28px;
+}
+.app-drawer a,
+.app-drawer button {
+  width: 100%;
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 28px;
+  background: transparent;
+  color: #46534b;
+  font-size: 17px;
+  text-decoration: none;
+}
+.app-drawer a svg,
+.app-drawer button svg {
+  width: 24px;
+  height: 24px;
+}
+.app-drawer .active {
+  background: #f8e8c8;
+  color: #342504;
+  font-weight: 750;
+}
+.calendar-toolbar {
+  min-height: 82px;
+  display: grid;
+  grid-template-columns: 52px 1fr 52px;
+  align-items: center;
+  border-bottom: 1px solid #c7d2cb;
+  background: white;
+}
+.calendar-toolbar button {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #18201b;
+}
+.calendar-toolbar strong {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 23px;
+}
+.calendar-card {
+  margin: 24px 0 0;
+  overflow: hidden;
+  border: 1px solid #c7d2cb;
+  border-radius: 26px;
+  background: white;
+}
+.weekday-row,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+.weekday-row {
+  padding: 18px 18px 4px;
+  text-align: center;
+  color: #46534b;
+  font-weight: 700;
+}
+.weekday-row .sunday {
+  color: #ba1a1a;
+}
+.weekday-row .saturday {
+  color: #176b4d;
+}
+.calendar-grid {
+  min-height: 430px;
+  padding: 4px 18px 18px;
+  grid-auto-rows: minmax(66px, 1fr);
+}
+.calendar-grid button {
+  min-width: 0;
+  margin: 4px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: #18201b;
+}
+.calendar-grid button:hover {
+  background: #eef5f1;
+}
+.calendar-grid button.selected {
+  background: #ccebdd;
+  font-weight: 800;
+}
+.calendar-grid button > span {
+  font-size: 18px;
+}
+.calendar-grid button small {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.calendar-balance {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 18px;
+  border-top: 1px solid #c7d2cb;
+  background: #f8e8c8;
+}
+.calendar-balance span {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  color: #46534b;
+}
+.calendar-balance strong {
+  font-size: 22px;
+}
+.selected-day {
+  margin-top: 0;
+}
+.selected-day-heading {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  background: #f8e8c8;
+  color: #342504;
+}
+.selected-day-heading h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.selected-day-heading a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #52615a;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.day-empty {
+  min-height: 150px;
+  display: grid;
+  place-items: center;
+  margin-top: 16px;
+  border: 1px solid #d8dfdc;
+  border-radius: 18px;
+  background: white;
+  color: #78857f;
+}
+.transaction-cards {
+  display: grid;
+  gap: 10px;
+  padding-top: 16px;
+}
+.transaction-card {
+  display: grid;
+  grid-template-columns: 1fr 48px;
+  overflow: hidden;
+  border: 1px solid #c7d2cb;
+  border-radius: 18px;
+  background: #f0f0fa;
+}
+.transaction-card-main {
+  min-height: 84px;
+  display: grid;
+  grid-template-columns: 1fr auto 24px;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border: 0;
+  background: transparent;
+  color: #18201b;
+  text-align: left;
+}
+.transaction-card-main > span {
+  display: grid;
+  gap: 3px;
+}
+.transaction-card-main small {
+  color: #65736c;
+}
+.transaction-card-main b {
+  font-size: 21px;
+}
+.transaction-delete {
+  border: 0;
+  border-left: 1px solid #d5d8e5;
+  background: rgba(255, 255, 255, 0.42);
+  color: #8b3732;
+}
+.calendar-fab {
+  position: fixed;
+  right: max(24px, calc((100vw - 980px) / 2 + 28px));
+  bottom: 28px;
+  min-height: 58px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 18px;
+  background: #176b4d;
+  color: white;
+  box-shadow: 0 12px 25px rgba(23, 107, 77, 0.28);
+  font-size: 17px;
+  font-weight: 800;
+  z-index: 5;
+}
+.graph-page {
+  max-width: 980px;
+}
+.graph-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 30px 0 20px;
+}
+.graph-heading span {
+  color: #617069;
+  font-weight: 700;
+}
+.graph-heading h1 {
+  margin: 3px 0 0;
+  font-size: 28px;
+}
+.graph-heading > svg {
+  color: #5e5a8b;
+}
+.graph-controls {
+  display: flex;
+  align-items: end;
+  gap: 14px;
+  padding: 14px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: #e9eeeb;
+}
+.graph-controls > label {
+  display: grid;
+  gap: 5px;
+  color: #52615a;
+  font-size: 12px;
+  font-weight: 800;
+}
+.graph-controls select {
+  min-width: 190px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid #cbd5d0;
+  border-radius: 6px;
+  background: white;
+}
+.year-navigation {
+  height: 40px;
+  display: grid;
+  grid-template-columns: 40px minmax(110px, 1fr) 40px;
+  align-items: center;
+  margin-left: auto;
+  border: 1px solid #cbd5d0;
+  border-radius: 6px;
+  background: white;
+}
+.year-navigation button {
+  height: 38px;
+  border: 0;
+  background: transparent;
+  color: #52615a;
+}
+.year-navigation strong {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.selected-month-summary {
+  display: grid;
+  grid-template-columns: 50px 1fr 50px;
+  align-items: center;
+  padding: 20px;
+  margin-bottom: 14px;
+  border: 1px solid #d7d3e9;
+  border-radius: 18px;
+  background: #e6e3f4;
+}
+.selected-month-summary button {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.65);
+  color: #4d4975;
+}
+.selected-month-summary button:disabled {
+  opacity: 0.35;
+}
+.selected-month-summary div {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+}
+.selected-month-summary strong {
+  font-size: 27px;
+}
+.selected-month-summary small {
+  color: #5d5a6d;
+}
+.graph-card {
+  padding: 20px 20px 14px;
+  margin-bottom: 14px;
+  border: 1px solid #d8dfdc;
+  border-radius: 18px;
+  background: white;
+}
+.graph-card h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+.bar-chart {
+  height: 190px;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  align-items: end;
+  gap: 7px;
+  padding-top: 10px;
+  border-bottom: 1px solid #cbd5d0;
+}
+.bar-chart button {
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.bar-chart button > span {
+  min-height: 0;
+  border-radius: 5px 5px 0 0;
+  opacity: 0.72;
+}
+.bar-chart button.selected > span {
+  opacity: 1;
+  outline: 3px solid rgba(94, 90, 139, 0.2);
+}
+.bar-chart button.expense > span {
+  background: #ba1a1a;
+}
+.bar-chart button.income > span {
+  background: #176b4d;
+}
+.bar-chart button.balance > span {
+  background: #5e5a8b;
+}
+.bar-chart small {
+  color: #617069;
+  text-align: center;
+}
 .summary {
   padding: 36px 0 25px;
   display: flex;
@@ -451,6 +869,10 @@ header > a {
   height: auto;
   margin: 0;
 }
+.field-error {
+  color: #b3261e;
+  font-weight: 600;
+}
 .dialog input,
 .dialog select {
   height: 42px;
@@ -489,7 +911,33 @@ header > a {
   display: block;
 }
 .categories-dialog .inline {
-  margin: 20px 0 16px;
+  margin: 12px 0 16px;
+}
+.category-type {
+  margin-top: 20px;
+}
+.category-list > div > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.type-badge {
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.type-badge.expense {
+  background: #fff0ef;
+  color: #a32c24;
+}
+.type-badge.income {
+  background: #e5f1eb;
+  color: #176b4d;
+}
+.category-list .empty-category {
+  justify-content: center;
+  color: #78857f;
 }
 .categories-dialog .inline input {
   height: 40px;
@@ -1156,6 +1604,88 @@ select:focus-visible {
 @media (max-width: 700px) {
   main {
     padding: 0 14px 30px;
+  }
+  .calendar-page {
+    padding-bottom: 105px;
+  }
+  .calendar-card {
+    margin-top: 14px;
+    border-radius: 20px;
+  }
+  .calendar-toolbar {
+    min-height: 70px;
+  }
+  .calendar-toolbar strong {
+    font-size: 20px;
+  }
+  .weekday-row {
+    padding: 14px 6px 2px;
+  }
+  .calendar-grid {
+    min-height: 360px;
+    padding: 2px 6px 12px;
+    grid-auto-rows: minmax(56px, 1fr);
+  }
+  .calendar-grid button {
+    margin: 2px;
+    border-radius: 14px;
+  }
+  .calendar-grid button > span {
+    font-size: 16px;
+  }
+  .calendar-grid button small {
+    font-size: 9px;
+  }
+  .calendar-balance {
+    padding: 13px 6px;
+  }
+  .calendar-balance strong {
+    font-size: 17px;
+  }
+  .selected-day-heading {
+    min-height: 56px;
+    margin: 0 -14px;
+  }
+  .selected-day-heading h2 {
+    font-size: 18px;
+  }
+  .transaction-card-main {
+    grid-template-columns: 1fr auto 18px;
+    padding: 12px 14px;
+  }
+  .transaction-card-main b {
+    font-size: 18px;
+  }
+  .calendar-fab {
+    right: 18px;
+    bottom: 20px;
+  }
+  .graph-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .graph-controls .summary-tabs {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .graph-controls > label {
+    width: 100%;
+  }
+  .graph-controls select {
+    width: 100%;
+  }
+  .year-navigation {
+    width: 100%;
+    margin-left: 0;
+  }
+  .selected-month-summary {
+    padding: 16px 8px;
+  }
+  .selected-month-summary strong {
+    font-size: 22px;
+  }
+  .bar-chart {
+    height: 155px;
+    gap: 4px;
   }
   header {
     height: 58px;

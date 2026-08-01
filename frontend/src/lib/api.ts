@@ -61,10 +61,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 export const api = {
   categories: () => request<Category[]>("/categories"),
-  saveCategory: (x: Pick<Category, "uuid" | "name">, editing: boolean) =>
+  saveCategory: (
+    x: Pick<Category, "uuid" | "name" | "type">,
+    editing: boolean,
+  ) =>
     request<Category>(editing ? `/categories/${x.uuid}` : "/categories", {
       method: editing ? "PUT" : "POST",
-      body: JSON.stringify(editing ? { name: x.name } : x),
+      body: JSON.stringify(editing ? { name: x.name, type: x.type } : x),
     }),
   deleteCategory: (id: string) =>
     request<void>(`/categories/${id}`, { method: "DELETE" }),

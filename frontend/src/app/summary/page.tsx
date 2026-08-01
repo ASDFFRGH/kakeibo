@@ -57,7 +57,7 @@ export default function SummaryPage() {
         </div>
         <Link className="secondary" href="/">
           <List size={18} />
-          支出一覧
+          カレンダー
         </Link>
       </header>
 

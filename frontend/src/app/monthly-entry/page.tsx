@@ -185,7 +185,7 @@ export default function MonthlyEntryPage() {
         </div>
         <Link className="secondary" href="/">
           <List size={18} />
-          収支一覧
+          カレンダー
         </Link>
       </header>
 

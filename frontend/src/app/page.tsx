@@ -6,11 +6,12 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  LineChart,
+  Menu,
   Pencil,
   Plus,
   RefreshCw,
   RotateCcw,
-  Search,
   Settings,
   Trash2,
   WalletCards,
@@ -18,20 +19,22 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { api, Category, Expense } from "../lib/api";
+import { localToday, monthEnd } from "../lib/calendar-date.mjs";
 import { orderCategoriesByExpenseFrequency } from "../lib/category-order.mjs";
 
-const today = () => new Date().toISOString().slice(0, 10);
 const money = new Intl.NumberFormat("ja-JP", {
   style: "currency",
   currency: "JPY",
+  maximumFractionDigits: 0,
 });
 export default function Home() {
   const [categories, setCategories] = useState<Category[]>([]),
     [expenses, setExpenses] = useState<Expense[]>([]),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
-  const [month, setMonth] = useState(today().slice(0, 7)),
-    [categoryFilter, setCategoryFilter] = useState(""),
+  const [month, setMonth] = useState(localToday().slice(0, 7)),
+    [selectedDate, setSelectedDate] = useState(localToday()),
+    [navOpen, setNavOpen] = useState(false),
     [dialog, setDialog] = useState<"expense" | "category" | "trash" | null>(
       null,
     ),
@@ -41,10 +44,8 @@ export default function Home() {
     setError("");
     try {
       const from = `${month}-01`,
-        to = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)
-          .toISOString()
-          .slice(0, 10),
-        query = `?from=${from}&to=${to}${categoryFilter ? `&category_uuid=${categoryFilter}` : ""}`;
+        to = monthEnd(month),
+        query = `?from=${from}&to=${to}`;
       const [c, e, allExpenses] = await Promise.all([
         api.categories(),
         api.expenses(query),
@@ -57,7 +58,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [month, categoryFilter]);
+  }, [month]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -70,158 +71,264 @@ export default function Home() {
       .reduce((sum, x) => sum + x.amount, 0);
     return { income, expense, balance: income - expense };
   }, [expenses]);
+  const selectedExpenses = useMemo(
+    () => expenses.filter((expense) => expense.date === selectedDate),
+    [expenses, selectedDate],
+  );
+  const dailyBalances = useMemo(() => {
+    const balances = new Map<string, number>();
+    expenses.forEach((expense) => {
+      const signed =
+        expense.type === "income" ? expense.amount : -expense.amount;
+      balances.set(expense.date, (balances.get(expense.date) ?? 0) + signed);
+    });
+    return balances;
+  }, [expenses]);
+  const calendarDays = useMemo(() => buildCalendarDays(month), [month]);
   const shift = (delta: number) => {
     const d = new Date(
       Number(month.slice(0, 4)),
       Number(month.slice(5, 7)) - 1 + delta,
       1,
     );
-    setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    const nextMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const currentDay = Number(selectedDate.slice(8, 10));
+    const nextDay = Math.min(
+      currentDay,
+      Number(monthEnd(nextMonth).slice(8, 10)),
+    );
+    setMonth(nextMonth);
+    setSelectedDate(`${nextMonth}-${String(nextDay).padStart(2, "0")}`);
   };
   const remove = async (x: Expense) => {
     if (!confirm(`${x.memo || "この収支"}を削除しますか？`)) return;
     await api.deleteExpense(x.uuid);
     await load();
   };
+  const closeDialog = () => {
+    setDialog(null);
+    setEditing(null);
+  };
   return (
-    <main>
-      <header>
+    <main className="calendar-page">
+      <header className="app-topbar">
+        <button
+          className="menu-button"
+          aria-label="メニューを開く"
+          onClick={() => setNavOpen(true)}
+        >
+          <Menu />
+        </button>
         <div className="brand">
           <WalletCards />
           <span>My 家計簿</span>
         </div>
-        <div className="header-actions">
-          <Link className="secondary" href="/summary">
-            <BarChart3 size={18} />
-            サマリー
-          </Link>
-          <button className="secondary" onClick={() => setDialog("category")}>
-            <Settings size={18} />
-            カテゴリ
-          </button>
-          <button className="secondary" onClick={() => setDialog("trash")}>
-            <Trash2 size={18} />
-            ゴミ箱
-          </button>
-        </div>
-      </header>
-      <section className="summary">
-        <div>
-          <span>今月の収支</span>
-          <strong>差引 {money.format(totals.balance)}</strong>
-          <div className="summary-totals">
-            <span className="income-amount">
-              収入 +{money.format(totals.income)}
-            </span>
-            <span className="expense-amount">
-              支出 -{money.format(totals.expense)}
-            </span>
-          </div>
-          <small>{expenses.length}件</small>
-        </div>
-        <nav className="summary-actions" aria-label="収支の入力">
-          <Link className="secondary" href="/monthly-entry">
-            <ClipboardList size={18} />
-            まとめて入力
-          </Link>
-          <button
-            className="primary"
-            onClick={() => {
-              setEditing(null);
-              setDialog("expense");
-            }}
-          >
-            <Plus size={19} />
-            収支を追加
-          </button>
-        </nav>
-      </section>
-      <section className="toolbar">
-        <div className="month">
-          <button aria-label="前月" onClick={() => shift(-1)}>
-            <ChevronLeft />
-          </button>
-          <span>
-            <CalendarDays size={18} />
-            {month.replace("-", "年")}月
-          </span>
-          <button aria-label="翌月" onClick={() => shift(1)}>
-            <ChevronRight />
-          </button>
-        </div>
-        <label>
-          <Search size={17} />
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-          >
-            <option value="">すべてのカテゴリ</option>
-            {categories.map((c) => (
-              <option key={c.uuid} value={c.uuid}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
         <button className="icon" title="再読み込み" onClick={() => void load()}>
           <RefreshCw size={18} />
         </button>
+      </header>
+
+      {navOpen && (
+        <div
+          className="nav-scrim"
+          onMouseDown={(event) =>
+            event.target === event.currentTarget && setNavOpen(false)
+          }
+        >
+          <aside className="app-drawer" aria-label="メインメニュー">
+            <h1>My 家計簿</h1>
+            <button className="active" onClick={() => setNavOpen(false)}>
+              <CalendarDays />
+              カレンダー
+            </button>
+            <Link href="/summary">
+              <BarChart3 />
+              サマリー
+            </Link>
+            <Link href="/graph">
+              <LineChart />
+              グラフ
+            </Link>
+            <button
+              onClick={() => {
+                setNavOpen(false);
+                setDialog("category");
+              }}
+            >
+              <Settings />
+              カテゴリ
+            </button>
+            <button
+              onClick={() => {
+                setNavOpen(false);
+                setDialog("trash");
+              }}
+            >
+              <Trash2 />
+              ゴミ箱
+            </button>
+            <Link href="/monthly-entry">
+              <ClipboardList />
+              まとめて入力
+            </Link>
+          </aside>
+        </div>
+      )}
+
+      <section className="calendar-toolbar">
+        <button aria-label="前月" onClick={() => shift(-1)}>
+          <ChevronLeft />
+        </button>
+        <strong>
+          <CalendarDays size={23} />
+          {formatMonth(month)}
+        </strong>
+        <button aria-label="翌月" onClick={() => shift(1)}>
+          <ChevronRight />
+        </button>
       </section>
+
       {error && <div className="error">{error}</div>}
-      <section className="table">
-        <div className="thead">
-          <span>日付</span>
-          <span>カテゴリ</span>
-          <span>メモ</span>
-          <span>金額</span>
-          <span />
+      <section
+        className="calendar-card"
+        aria-label={`${formatMonth(month)}のカレンダー`}
+      >
+        <div className="weekday-row" aria-hidden="true">
+          {["日", "月", "火", "水", "木", "金", "土"].map((day, index) => (
+            <span
+              className={index === 0 ? "sunday" : index === 6 ? "saturday" : ""}
+              key={day}
+            >
+              {day}
+            </span>
+          ))}
+        </div>
+        <div className="calendar-grid">
+          {calendarDays.map((date, index) =>
+            date ? (
+              <button
+                className={date === selectedDate ? "selected" : ""}
+                key={date}
+                onClick={() => setSelectedDate(date)}
+              >
+                <span>{Number(date.slice(8, 10))}</span>
+                {dailyBalances.has(date) && (
+                  <small
+                    className={
+                      (dailyBalances.get(date) ?? 0) >= 0
+                        ? "income-amount"
+                        : "expense-amount"
+                    }
+                  >
+                    {signedMoney(dailyBalances.get(date) ?? 0)}
+                  </small>
+                )}
+              </button>
+            ) : (
+              <span className="calendar-blank" key={`blank-${index}`} />
+            ),
+          )}
+        </div>
+        <div className="calendar-balance">
+          <span>
+            収入
+            <strong className="income-amount">
+              {money.format(totals.income)}
+            </strong>
+          </span>
+          <span>
+            支出
+            <strong className="expense-amount">
+              {money.format(totals.expense)}
+            </strong>
+          </span>
+          <span>
+            収支
+            <strong
+              className={
+                totals.balance >= 0 ? "income-amount" : "expense-amount"
+              }
+            >
+              {signedMoney(totals.balance)}
+            </strong>
+          </span>
+        </div>
+      </section>
+
+      <section className="selected-day">
+        <div className="selected-day-heading">
+          <h2>{formatSelectedDate(selectedDate)}</h2>
+          <Link href="/monthly-entry">
+            <ClipboardList size={17} />
+            まとめて入力
+          </Link>
         </div>
         {loading ? (
-          <div className="empty">読み込み中...</div>
-        ) : expenses.length === 0 ? (
-          <div className="empty">この月の収支はありません</div>
+          <div className="day-empty">読み込み中...</div>
+        ) : selectedExpenses.length === 0 ? (
+          <div className="day-empty">この日の収支はありません</div>
         ) : (
-          expenses.map((x) => (
-            <div className="row" key={x.uuid}>
-              <time>{x.date.slice(5).replace("-", "/")}</time>
-              <span className="category">
-                {categories.find((c) => c.uuid === x.category_uuid)?.name ??
-                  "未分類"}
-              </span>
-              <span className="memo">{x.memo || "-"}</span>
-              <strong
-                className={
-                  x.type === "income" ? "income-amount" : "expense-amount"
-                }
-              >
-                {x.type === "income" ? "+" : "-"}
-                {money.format(x.amount)}
-              </strong>
-              <span className="actions">
-                <button
-                  title="編集"
-                  onClick={() => {
-                    setEditing(x);
-                    setDialog("expense");
-                  }}
-                >
-                  <Pencil size={17} />
-                </button>
-                <button title="削除" onClick={() => void remove(x)}>
-                  <Trash2 size={17} />
-                </button>
-              </span>
-            </div>
-          ))
+          <div className="transaction-cards">
+            {selectedExpenses.map((expense) => {
+              const category =
+                categories.find((item) => item.uuid === expense.category_uuid)
+                  ?.name ?? "未分類";
+              return (
+                <article className="transaction-card" key={expense.uuid}>
+                  <button
+                    className="transaction-card-main"
+                    onClick={() => {
+                      setEditing(expense);
+                      setDialog("expense");
+                    }}
+                  >
+                    <span>
+                      <strong>{category}</strong>
+                      {expense.memo && <small>{expense.memo}</small>}
+                    </span>
+                    <b
+                      className={
+                        expense.type === "income"
+                          ? "income-amount"
+                          : "expense-amount"
+                      }
+                    >
+                      {expense.type === "income" ? "+" : "-"}
+                      {money.format(expense.amount)}
+                    </b>
+                    <ChevronRight />
+                  </button>
+                  <button
+                    className="transaction-delete"
+                    title="削除"
+                    onClick={() => void remove(expense)}
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                </article>
+              );
+            })}
+          </div>
         )}
       </section>
+
+      <button
+        className="calendar-fab"
+        onClick={() => {
+          setEditing(null);
+          setDialog("expense");
+        }}
+      >
+        <Plus />
+        収支を追加
+      </button>
       {dialog === "expense" && (
         <ExpenseDialog
           categories={categories}
           expense={editing}
-          close={() => setDialog(null)}
+          close={closeDialog}
           saved={async () => {
-            setDialog(null);
+            closeDialog();
             await load();
           }}
         />
@@ -243,6 +350,37 @@ export default function Home() {
     </main>
   );
 }
+
+function buildCalendarDays(month: string): (string | null)[] {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const firstWeekday = new Date(year, monthNumber - 1, 1).getDay();
+  const lastDay = Number(monthEnd(month).slice(8, 10));
+  return [
+    ...Array<null>(firstWeekday).fill(null),
+    ...Array.from(
+      { length: lastDay },
+      (_, index) => `${month}-${String(index + 1).padStart(2, "0")}`,
+    ),
+  ];
+}
+
+function formatMonth(month: string) {
+  const [year, monthNumber] = month.split("-");
+  return `${year}年${Number(monthNumber)}月`;
+}
+
+function formatSelectedDate(date: string) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString("ja-JP", {
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  });
+}
+
+function signedMoney(value: number) {
+  if (value === 0) return money.format(0);
+  return `${value > 0 ? "+" : "-"}${money.format(Math.abs(value))}`;
+}
 function ExpenseDialog({
   categories,
   expense,
@@ -254,14 +392,18 @@ function ExpenseDialog({
   close: () => void;
   saved: () => Promise<void>;
 }) {
-  const [date, setDate] = useState(expense?.date ?? today()),
+  const initialType = expense?.type ?? "expense";
+  const [date, setDate] = useState(expense?.date ?? localToday()),
     [amount, setAmount] = useState(expense?.amount.toString() ?? ""),
-    [type, setType] = useState<Expense["type"]>(expense?.type ?? "expense"),
+    [type, setType] = useState<Expense["type"]>(initialType),
     [category, setCategory] = useState(
-      expense?.category_uuid ?? categories[0]?.uuid ?? "",
+      expense?.category_uuid ??
+        categories.find((c) => c.type === initialType)?.uuid ??
+        "",
     ),
     [memo, setMemo] = useState(expense?.memo ?? ""),
     [busy, setBusy] = useState(false);
+  const availableCategories = categories.filter((c) => c.type === type);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -302,7 +444,12 @@ function ExpenseDialog({
               name="type"
               value="expense"
               checked={type === "expense"}
-              onChange={() => setType("expense")}
+              onChange={() => {
+                setType("expense");
+                setCategory(
+                  categories.find((c) => c.type === "expense")?.uuid ?? "",
+                );
+              }}
             />
             支出
           </label>
@@ -312,7 +459,12 @@ function ExpenseDialog({
               name="type"
               value="income"
               checked={type === "income"}
-              onChange={() => setType("income")}
+              onChange={() => {
+                setType("income");
+                setCategory(
+                  categories.find((c) => c.type === "income")?.uuid ?? "",
+                );
+              }}
             />
             収入
           </label>
@@ -339,18 +491,24 @@ function ExpenseDialog({
           />
         </label>
         <label>
-          カテゴリ
+          {type === "income" ? "収入" : "支出"}カテゴリ
           <select
             required
             value={category}
             onChange={(e) => setCategory(e.target.value)}
           >
-            {categories.map((c) => (
+            {availableCategories.map((c) => (
               <option key={c.uuid} value={c.uuid}>
                 {c.name}
               </option>
             ))}
           </select>
+          {availableCategories.length === 0 && (
+            <small className="field-error">
+              {type === "income" ? "収入" : "支出"}
+              カテゴリを先に作成してください
+            </small>
+          )}
         </label>
         <label>
           メモ
@@ -383,15 +541,22 @@ function CategoryDialog({
   changed: () => Promise<void>;
 }) {
   const [name, setName] = useState(""),
+    [type, setType] = useState<Category["type"]>("expense"),
     [edit, setEdit] = useState<Category | null>(null);
+  const visibleCategories = categories.filter(
+    (category) => category.type === type,
+  );
+  const clearEditing = () => {
+    setName("");
+    setEdit(null);
+  };
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     await api.saveCategory(
-      { uuid: edit?.uuid ?? crypto.randomUUID(), name },
+      { uuid: edit?.uuid ?? crypto.randomUUID(), name, type },
       !!edit,
     );
-    setName("");
-    setEdit(null);
+    clearEditing();
     await changed();
   };
   const remove = async (c: Category) => {
@@ -408,6 +573,37 @@ function CategoryDialog({
             <X />
           </button>
         </div>
+        <fieldset className="transaction-type category-type">
+          <legend>カテゴリの種別</legend>
+          <label>
+            <input
+              type="radio"
+              name="category-type"
+              value="expense"
+              checked={type === "expense"}
+              disabled={edit !== null}
+              onChange={() => {
+                setType("expense");
+                clearEditing();
+              }}
+            />
+            支出
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="category-type"
+              value="income"
+              checked={type === "income"}
+              disabled={edit !== null}
+              onChange={() => {
+                setType("income");
+                clearEditing();
+              }}
+            />
+            収入
+          </label>
+        </fieldset>
         <form className="inline" onSubmit={submit}>
           <input
             required
@@ -418,15 +614,26 @@ function CategoryDialog({
           <button className="primary">{edit ? "更新" : "追加"}</button>
         </form>
         <div className="category-list">
-          {categories.map((c) => (
+          {visibleCategories.length === 0 && (
+            <div className="empty-category">
+              {type === "income" ? "収入" : "支出"}カテゴリはまだありません
+            </div>
+          )}
+          {visibleCategories.map((c) => (
             <div key={c.uuid}>
-              <span>{c.name}</span>
+              <span>
+                {c.name}
+                <small className={`type-badge ${c.type}`}>
+                  {c.type === "income" ? "収入" : "支出"}
+                </small>
+              </span>
               <span>
                 <button
                   title="編集"
                   onClick={() => {
                     setEdit(c);
                     setName(c.name);
+                    setType(c.type);
                   }}
                 >
                   <Pencil size={16} />
@@ -553,7 +760,14 @@ function TrashDialog({
             {deletedCategories.length > 0 && <h3>カテゴリ</h3>}
             {deletedCategories.map((category) => (
               <div key={category.uuid}>
-                <span>{category.name}</span>
+                <span>
+                  {category.name}
+                  <small>
+                    {category.type === "income"
+                      ? "収入カテゴリ"
+                      : "支出カテゴリ"}
+                  </small>
+                </span>
                 <button
                   className="secondary"
                   disabled={restoringId !== ""}
