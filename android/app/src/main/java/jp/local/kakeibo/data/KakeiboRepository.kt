@@ -123,7 +123,7 @@ class KakeiboRepository(
                 expenses = database.expenses().unsynced(),
             )
         val response = api.sync(request)
-        check(response.success)
+        check(response.success) { "サーバーが同期の失敗を返しました" }
 
         database.withTransaction {
             database.categories().upsert(

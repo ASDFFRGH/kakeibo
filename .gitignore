@@ -19,5 +19,8 @@ android/.gradle/
 android/local.properties
 android/**/build/
 android/captures/
+*.keystore
+*.jks
+android/keystore.properties
 .kotlin/
 *.iml

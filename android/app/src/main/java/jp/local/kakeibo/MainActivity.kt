@@ -3,6 +3,7 @@ package jp.local.kakeibo
 import android.app.Application
 import android.app.DatePickerDialog
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -72,6 +73,7 @@ import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -113,6 +115,7 @@ import jp.local.kakeibo.category.forTransactionType
 import jp.local.kakeibo.data.CategoryEntity
 import jp.local.kakeibo.data.ExpenseEntity
 import jp.local.kakeibo.data.TransactionType
+import jp.local.kakeibo.data.syncFailureMessage
 import jp.local.kakeibo.expense.calendarDates
 import jp.local.kakeibo.expense.coerceDay
 import jp.local.kakeibo.expense.dailyTotals
@@ -122,6 +125,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
@@ -198,8 +202,10 @@ class MainViewModel(
                 try {
                     repository.sync()
                     false to "同期しました"
-                } catch (_: Exception) {
-                    false to "同期に失敗しました"
+                } catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    Log.e("KakeiboSync", "同期に失敗しました: ${BuildConfig.API_BASE_URL}", error)
+                    false to syncFailureMessage(error)
                 }
         }
 
@@ -266,7 +272,12 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(state.message) {
-        state.message?.let { snackbar.showSnackbar(it) }
+        state.message?.let {
+            snackbar.showSnackbar(
+                message = it,
+                duration = SnackbarDuration.Long,
+            )
+        }
     }
     LaunchedEffect(state.categories, selectedSummaryCategoryUuid) {
         if (
