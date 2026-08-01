@@ -12,13 +12,13 @@ const expense = (category_uuid, deleted_at = null, amount = 0) => ({
   amount,
 });
 
-test("orders categories by active transaction amount descending", () => {
+test("orders categories by cumulative active amount across months", () => {
   const categories = [category("daily"), category("food"), category("travel")];
   const expenses = [
-    expense("daily", null, 500),
-    expense("food", null, 3000),
-    expense("travel", null, 1000),
-    expense("daily", null, 2000),
+    { ...expense("daily", null, 500), date: "2026-05-31" },
+    { ...expense("food", null, 3000), date: "2026-06-30" },
+    { ...expense("travel", null, 1000), date: "2026-07-31" },
+    { ...expense("daily", null, 2000), date: "2026-08-31" },
     expense("travel", "2026-07-15T00:00:00Z", 9000),
   ];
 

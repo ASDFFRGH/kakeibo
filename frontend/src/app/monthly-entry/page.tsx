@@ -35,6 +35,7 @@ export default function MonthlyEntryPage() {
   const [type, setType] = useState<TransactionType>("expense");
   const [categories, setCategories] = useState<Category[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
   const [amounts, setAmounts] = useState<Amounts>({});
   const [batchUuids, setBatchUuids] = useState<Record<string, string>>({});
   const [memo, setMemo] = useState("月次まとめ");
@@ -49,12 +50,15 @@ export default function MonthlyEntryPage() {
     setLoading(true);
     setError("");
     try {
-      const [loadedCategories, loadedExpenses] = await Promise.all([
-        api.categories(),
-        api.expenses(`?from=${month}-01&to=${monthEnd(month)}`),
-      ]);
+      const [loadedCategories, loadedExpenses, loadedAllExpenses] =
+        await Promise.all([
+          api.categories(),
+          api.expenses(`?from=${month}-01&to=${monthEnd(month)}`),
+          api.expenses(),
+        ]);
       setCategories(loadedCategories);
       setExpenses(loadedExpenses);
+      setAllExpenses(loadedAllExpenses);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "読込に失敗しました");
     } finally {
@@ -67,14 +71,14 @@ export default function MonthlyEntryPage() {
   }, [load]);
 
   const visibleCategories = useMemo(() => {
-    const matchingExpenses = expenses.filter(
+    const matchingExpenses = allExpenses.filter(
       (expense) => expense.type === type,
     );
     return orderCategoriesByAmount(
       categories.filter((category) => (category.type || "expense") === type),
       matchingExpenses,
     );
-  }, [categories, expenses, type]);
+  }, [allExpenses, categories, type]);
   const existingByCategory = useMemo(() => {
     const result = new Map<string, { amount: number; count: number }>();
     expenses
