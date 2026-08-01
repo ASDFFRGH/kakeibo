@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { api, Category, Expense } from "../../lib/api";
+import { orderCategoriesByAmount } from "../../lib/category-order.mjs";
 
 type TransactionType = Expense["type"];
 type Amounts = Record<string, string>;
@@ -65,11 +66,15 @@ export default function MonthlyEntryPage() {
     void load();
   }, [load]);
 
-  const visibleCategories = useMemo(
-    () =>
+  const visibleCategories = useMemo(() => {
+    const matchingExpenses = expenses.filter(
+      (expense) => expense.type === type,
+    );
+    return orderCategoriesByAmount(
       categories.filter((category) => (category.type || "expense") === type),
-    [categories, type],
-  );
+      matchingExpenses,
+    );
+  }, [categories, expenses, type]);
   const existingByCategory = useMemo(() => {
     const result = new Map<string, { amount: number; count: number }>();
     expenses

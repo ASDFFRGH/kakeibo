@@ -123,9 +123,45 @@ export default function Home() {
           <WalletCards />
           <span>My 家計簿</span>
         </div>
-        <button className="icon" title="再読み込み" onClick={() => void load()}>
-          <RefreshCw size={18} />
-        </button>
+        <nav className="desktop-nav" aria-label="メインナビゲーション">
+          <Link className="active" href="/">
+            <CalendarDays size={17} />
+            カレンダー
+          </Link>
+          <Link href="/summary">
+            <BarChart3 size={17} />
+            サマリー
+          </Link>
+          <Link href="/graph">
+            <LineChart size={17} />
+            グラフ
+          </Link>
+          <Link href="/monthly-entry">
+            <ClipboardList size={17} />
+            まとめて入力
+          </Link>
+        </nav>
+        <div className="desktop-actions">
+          <button title="カテゴリ" onClick={() => setDialog("category")}>
+            <Settings size={18} />
+          </button>
+          <button title="ゴミ箱" onClick={() => setDialog("trash")}>
+            <Trash2 size={18} />
+          </button>
+          <button title="再読み込み" onClick={() => void load()}>
+            <RefreshCw size={18} />
+          </button>
+          <button
+            className="primary"
+            onClick={() => {
+              setEditing(null);
+              setDialog("expense");
+            }}
+          >
+            <Plus size={18} />
+            収支を追加
+          </button>
+        </div>
       </header>
 
       {navOpen && (
@@ -175,142 +211,148 @@ export default function Home() {
         </div>
       )}
 
-      <section className="calendar-toolbar">
-        <button aria-label="前月" onClick={() => shift(-1)}>
-          <ChevronLeft />
-        </button>
-        <strong>
-          <CalendarDays size={23} />
-          {formatMonth(month)}
-        </strong>
-        <button aria-label="翌月" onClick={() => shift(1)}>
-          <ChevronRight />
-        </button>
-      </section>
-
       {error && <div className="error">{error}</div>}
-      <section
-        className="calendar-card"
-        aria-label={`${formatMonth(month)}のカレンダー`}
-      >
-        <div className="weekday-row" aria-hidden="true">
-          {["日", "月", "火", "水", "木", "金", "土"].map((day, index) => (
-            <span
-              className={index === 0 ? "sunday" : index === 6 ? "saturday" : ""}
-              key={day}
-            >
-              {day}
+      <div className="calendar-dashboard">
+        <div className="calendar-panel">
+          <section className="calendar-toolbar">
+            <button aria-label="前月" onClick={() => shift(-1)}>
+              <ChevronLeft />
+            </button>
+            <strong>
+              <CalendarDays size={23} />
+              {formatMonth(month)}
+            </strong>
+            <button aria-label="翌月" onClick={() => shift(1)}>
+              <ChevronRight />
+            </button>
+          </section>
+          <section
+            className="calendar-card"
+            aria-label={`${formatMonth(month)}のカレンダー`}
+          >
+            <div className="weekday-row" aria-hidden="true">
+              {["日", "月", "火", "水", "木", "金", "土"].map((day, index) => (
+                <span
+                  className={
+                    index === 0 ? "sunday" : index === 6 ? "saturday" : ""
+                  }
+                  key={day}
+                >
+                  {day}
+                </span>
+              ))}
+            </div>
+            <div className="calendar-grid">
+              {calendarDays.map((date, index) =>
+                date ? (
+                  <button
+                    className={date === selectedDate ? "selected" : ""}
+                    key={date}
+                    onClick={() => setSelectedDate(date)}
+                  >
+                    <span>{Number(date.slice(8, 10))}</span>
+                    {dailyBalances.has(date) && (
+                      <small
+                        className={
+                          (dailyBalances.get(date) ?? 0) >= 0
+                            ? "income-amount"
+                            : "expense-amount"
+                        }
+                      >
+                        {signedMoney(dailyBalances.get(date) ?? 0)}
+                      </small>
+                    )}
+                  </button>
+                ) : (
+                  <span className="calendar-blank" key={`blank-${index}`} />
+                ),
+              )}
+            </div>
+          </section>
+          <div className="calendar-balance">
+            <span>
+              <small>収入</small>
+              <strong className="income-amount">
+                {money.format(totals.income)}
+              </strong>
             </span>
-          ))}
-        </div>
-        <div className="calendar-grid">
-          {calendarDays.map((date, index) =>
-            date ? (
-              <button
-                className={date === selectedDate ? "selected" : ""}
-                key={date}
-                onClick={() => setSelectedDate(date)}
+            <span>
+              <small>支出</small>
+              <strong className="expense-amount">
+                {money.format(totals.expense)}
+              </strong>
+            </span>
+            <span>
+              <small>収支</small>
+              <strong
+                className={
+                  totals.balance >= 0 ? "income-amount" : "expense-amount"
+                }
               >
-                <span>{Number(date.slice(8, 10))}</span>
-                {dailyBalances.has(date) && (
-                  <small
-                    className={
-                      (dailyBalances.get(date) ?? 0) >= 0
-                        ? "income-amount"
-                        : "expense-amount"
-                    }
-                  >
-                    {signedMoney(dailyBalances.get(date) ?? 0)}
-                  </small>
-                )}
-              </button>
-            ) : (
-              <span className="calendar-blank" key={`blank-${index}`} />
-            ),
-          )}
-        </div>
-        <div className="calendar-balance">
-          <span>
-            収入
-            <strong className="income-amount">
-              {money.format(totals.income)}
-            </strong>
-          </span>
-          <span>
-            支出
-            <strong className="expense-amount">
-              {money.format(totals.expense)}
-            </strong>
-          </span>
-          <span>
-            収支
-            <strong
-              className={
-                totals.balance >= 0 ? "income-amount" : "expense-amount"
-              }
-            >
-              {signedMoney(totals.balance)}
-            </strong>
-          </span>
-        </div>
-      </section>
-
-      <section className="selected-day">
-        <div className="selected-day-heading">
-          <h2>{formatSelectedDate(selectedDate)}</h2>
-          <Link href="/monthly-entry">
-            <ClipboardList size={17} />
-            まとめて入力
-          </Link>
-        </div>
-        {loading ? (
-          <div className="day-empty">読み込み中...</div>
-        ) : selectedExpenses.length === 0 ? (
-          <div className="day-empty">この日の収支はありません</div>
-        ) : (
-          <div className="transaction-cards">
-            {selectedExpenses.map((expense) => {
-              const category =
-                categories.find((item) => item.uuid === expense.category_uuid)
-                  ?.name ?? "未分類";
-              return (
-                <article className="transaction-card" key={expense.uuid}>
-                  <button
-                    className="transaction-card-main"
-                    onClick={() => {
-                      setEditing(expense);
-                      setDialog("expense");
-                    }}
-                  >
-                    <span>
-                      <strong>{category}</strong>
-                      {expense.memo && <small>{expense.memo}</small>}
-                    </span>
-                    <b
-                      className={
-                        expense.type === "income"
-                          ? "income-amount"
-                          : "expense-amount"
-                      }
-                    >
-                      {expense.type === "income" ? "+" : "-"}
-                      {money.format(expense.amount)}
-                    </b>
-                    <ChevronRight />
-                  </button>
-                  <button
-                    className="transaction-delete"
-                    title="削除"
-                    onClick={() => void remove(expense)}
-                  >
-                    <Trash2 size={17} />
-                  </button>
-                </article>
-              );
-            })}
+                {signedMoney(totals.balance)}
+              </strong>
+            </span>
           </div>
-        )}
-      </section>
+        </div>
+
+        <section className="selected-day">
+          <div className="selected-day-heading">
+            <span>選択日の明細</span>
+            <h2>{formatSelectedDate(selectedDate)}</h2>
+            <Link href="/monthly-entry">
+              <ClipboardList size={17} />
+              まとめて入力
+            </Link>
+          </div>
+          {loading ? (
+            <div className="day-empty">読み込み中...</div>
+          ) : selectedExpenses.length === 0 ? (
+            <div className="day-empty">この日の収支はありません</div>
+          ) : (
+            <div className="transaction-cards">
+              {selectedExpenses.map((expense) => {
+                const category =
+                  categories.find((item) => item.uuid === expense.category_uuid)
+                    ?.name ?? "未分類";
+                return (
+                  <article className="transaction-card" key={expense.uuid}>
+                    <button
+                      className="transaction-card-main"
+                      onClick={() => {
+                        setEditing(expense);
+                        setDialog("expense");
+                      }}
+                    >
+                      <span>
+                        <strong>{category}</strong>
+                        {expense.memo && <small>{expense.memo}</small>}
+                      </span>
+                      <b
+                        className={
+                          expense.type === "income"
+                            ? "income-amount"
+                            : "expense-amount"
+                        }
+                      >
+                        {expense.type === "income" ? "+" : "-"}
+                        {money.format(expense.amount)}
+                      </b>
+                      <ChevronRight />
+                    </button>
+                    <button
+                      className="transaction-delete"
+                      title="削除"
+                      onClick={() => void remove(expense)}
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
 
       <button
         className="calendar-fab"
