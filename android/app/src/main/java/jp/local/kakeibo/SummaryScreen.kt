@@ -18,21 +18,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.outlined.Category
-import androidx.compose.material.icons.outlined.DirectionsTransit
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.MedicalServices
-import androidx.compose.material.icons.outlined.Payments
-import androidx.compose.material.icons.outlined.PhoneAndroid
-import androidx.compose.material.icons.outlined.Restaurant
-import androidx.compose.material.icons.outlined.Savings
-import androidx.compose.material.icons.outlined.SportsEsports
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -41,15 +30,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -59,95 +49,130 @@ import androidx.compose.ui.unit.dp
 import jp.local.kakeibo.data.CategoryEntity
 import jp.local.kakeibo.data.ExpenseEntity
 import jp.local.kakeibo.data.TransactionType
+import jp.local.kakeibo.category.categoryIcon
 import jp.local.kakeibo.summary.CategorySummary
 import jp.local.kakeibo.summary.SummaryCalculator
 import jp.local.kakeibo.summary.SummaryPeriod
 import jp.local.kakeibo.summary.SummaryResult
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
+
+private const val REPORT_PAGER_PAGE_COUNT = 2_401
+private const val REPORT_PAGER_INITIAL_PAGE = REPORT_PAGER_PAGE_COUNT / 2
 
 @Composable
 fun SummaryScreen(
     expenses: List<ExpenseEntity>,
     categories: List<CategoryEntity>,
-    selectedCategoryUuid: String,
-    onCategoryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var period by remember { mutableStateOf(SummaryPeriod.MONTH) }
-    var anchorDate by remember { mutableStateOf(LocalDate.now()) }
     var transactionType by remember { mutableStateOf(TransactionType.EXPENSE) }
-    var categoryMenuOpen by remember { mutableStateOf(false) }
-    val visibleExpenses =
-        remember(expenses, selectedCategoryUuid) {
-            expenses.filter { selectedCategoryUuid.isEmpty() || it.categoryUuid == selectedCategoryUuid }
-        }
-    val summary =
-        remember(period, anchorDate, visibleExpenses) {
-            SummaryCalculator.calculate(period, anchorDate, visibleExpenses)
-        }
-    val breakdown =
-        remember(summary, categories, transactionType) {
-            summary.categories
-                .mapNotNull { categorySummary ->
-                    categorySummary.toBreakdownItem(categories, transactionType)
-                }.sortedByDescending { it.amount }
-        }
-
-    LazyColumn(
+    Column(
         modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(bottom = 28.dp),
     ) {
-        item {
-            PeriodStrip(
+        ReportControls(
+            period = period,
+            onPeriodChange = { period = it },
+            transactionType = transactionType,
+            onTransactionTypeChange = { transactionType = it },
+        )
+        key(period) {
+            SummaryPeriodPager(
                 period = period,
-                anchorDate = anchorDate,
-                onAnchorChange = { anchorDate = it },
-            )
-        }
-        item {
-            ReportControls(
-                period = period,
-                onPeriodChange = {
-                    period = it
-                    anchorDate = LocalDate.now()
-                },
                 transactionType = transactionType,
-                onTransactionTypeChange = { transactionType = it },
+                expenses = expenses,
                 categories = categories,
-                selectedCategoryUuid = selectedCategoryUuid,
-                categoryMenuOpen = categoryMenuOpen,
-                onCategoryMenuChange = { categoryMenuOpen = it },
-                onCategoryChange = onCategoryChange,
+                modifier = Modifier.weight(1f),
             )
         }
-        item {
-            ReportOverview(
-                summary = summary,
-                transactionType = transactionType,
-                breakdown = breakdown,
-            )
-        }
-        item {
-            Text(
-                text = if (transactionType == TransactionType.EXPENSE) "支出の内訳" else "収入の内訳",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-            )
-        }
-        if (breakdown.isEmpty()) {
+    }
+}
+
+@Composable
+private fun SummaryPeriodPager(
+    period: SummaryPeriod,
+    transactionType: String,
+    expenses: List<ExpenseEntity>,
+    categories: List<CategoryEntity>,
+    modifier: Modifier = Modifier,
+) {
+    val baseDate = remember { LocalDate.now() }
+    val pagerState =
+        rememberPagerState(
+            initialPage = REPORT_PAGER_INITIAL_PAGE,
+            pageCount = { REPORT_PAGER_PAGE_COUNT },
+        )
+    val scope = rememberCoroutineScope()
+
+    HorizontalPager(
+        state = pagerState,
+        modifier = modifier.fillMaxWidth(),
+        beyondViewportPageCount = 1,
+    ) { page ->
+        val anchorDate = period.shift(baseDate, (page - REPORT_PAGER_INITIAL_PAGE).toLong())
+        val summary =
+            remember(period, anchorDate, expenses) {
+                SummaryCalculator.calculate(period, anchorDate, expenses)
+            }
+        val breakdown =
+            remember(summary, categories, transactionType) {
+                summary.categories
+                    .mapNotNull { categorySummary ->
+                        categorySummary.toBreakdownItem(categories, transactionType)
+                    }.sortedByDescending { it.amount }
+            }
+        val total = remember(breakdown) { breakdown.sumOf { it.amount } }
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 28.dp),
+        ) {
             item {
-                Text(
-                    text = "この期間の${reportTransactionLabel(transactionType)}はありません",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 40.dp),
+                PeriodStrip(
+                    period = period,
+                    anchorDate = anchorDate,
+                    onPrevious = {
+                        if (page > 0) {
+                            scope.launch { pagerState.animateScrollToPage(page - 1) }
+                        }
+                    },
+                    onNext = {
+                        if (page < REPORT_PAGER_PAGE_COUNT - 1) {
+                            scope.launch { pagerState.animateScrollToPage(page + 1) }
+                        }
+                    },
                 )
             }
-        } else {
-            items(breakdown, key = { it.categoryUuid }) { item ->
-                BreakdownRow(item = item, total = breakdown.sumOf { it.amount })
+            item {
+                ReportOverview(
+                    summary = summary,
+                    transactionType = transactionType,
+                    breakdown = breakdown,
+                )
+            }
+            item {
+                Text(
+                    text = if (transactionType == TransactionType.EXPENSE) "支出の内訳" else "収入の内訳",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                )
+            }
+            if (breakdown.isEmpty()) {
+                item {
+                    Text(
+                        text = "この期間の${reportTransactionLabel(transactionType)}はありません",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 40.dp),
+                    )
+                }
+            } else {
+                items(breakdown, key = { it.categoryUuid }) { item ->
+                    BreakdownRow(item = item, total = total)
+                }
             }
         }
     }
@@ -157,7 +182,8 @@ fun SummaryScreen(
 private fun PeriodStrip(
     period: SummaryPeriod,
     anchorDate: LocalDate,
-    onAnchorChange: (LocalDate) -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
 ) {
     val dates = listOf(period.shift(anchorDate, -1), anchorDate, period.shift(anchorDate, 1))
     Row(
@@ -171,7 +197,9 @@ private fun PeriodStrip(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clickable(enabled = !selected) { onAnchorChange(date) }
+                    .clickable(enabled = !selected) {
+                        if (index == 0) onPrevious() else onNext()
+                    }
                     .padding(top = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -207,11 +235,6 @@ private fun ReportControls(
     onPeriodChange: (SummaryPeriod) -> Unit,
     transactionType: String,
     onTransactionTypeChange: (String) -> Unit,
-    categories: List<CategoryEntity>,
-    selectedCategoryUuid: String,
-    categoryMenuOpen: Boolean,
-    onCategoryMenuChange: (Boolean) -> Unit,
-    onCategoryChange: (String) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
@@ -223,35 +246,6 @@ private fun ReportControls(
             onSelectedTypeChange = onTransactionTypeChange,
             modifier = Modifier.weight(1f),
         )
-        Box {
-            val selectedCategory = categories.find { it.uuid == selectedCategoryUuid }
-            FilterChip(
-                selected = selectedCategoryUuid.isNotEmpty(),
-                onClick = { onCategoryMenuChange(true) },
-                label = { Text(selectedCategory?.name ?: "カテゴリ") },
-            )
-            DropdownMenu(
-                expanded = categoryMenuOpen,
-                onDismissRequest = { onCategoryMenuChange(false) },
-            ) {
-                DropdownMenuItem(
-                    text = { Text("すべてのカテゴリ") },
-                    onClick = {
-                        onCategoryChange("")
-                        onCategoryMenuChange(false)
-                    },
-                )
-                categories.forEach { category ->
-                    DropdownMenuItem(
-                        text = { Text(summaryCategoryLabel(category)) },
-                        onClick = {
-                            onCategoryChange(category.uuid)
-                            onCategoryMenuChange(false)
-                        },
-                    )
-                }
-            }
-        }
         FilterChip(
             selected = period == SummaryPeriod.YEAR,
             onClick = {
@@ -498,20 +492,6 @@ private fun categoryColor(categoryUuid: String): Color {
     return ReportPalette[index]
 }
 
-private fun categoryIcon(name: String): ImageVector =
-    when {
-        name.contains("食") -> Icons.Outlined.Restaurant
-        name.contains("家") || name.contains("住宅") -> Icons.Outlined.Home
-        name.contains("医療") || name.contains("病院") -> Icons.Outlined.MedicalServices
-        name.contains("娯楽") || name.contains("ゲーム") -> Icons.Outlined.SportsEsports
-        name.contains("通信") || name.contains("スマホ") -> Icons.Outlined.PhoneAndroid
-        name.contains("交通") || name.contains("電車") -> Icons.Outlined.DirectionsTransit
-        name.contains("電気") || name.contains("光熱") -> Icons.Outlined.Bolt
-        name.contains("NISA") || name.contains("投資") || name.contains("貯蓄") -> Icons.Outlined.Savings
-        name.contains("給与") || name.contains("収入") -> Icons.Outlined.Payments
-        else -> Icons.Outlined.Category
-    }
-
 private fun periodLabel(
     period: SummaryPeriod,
     date: LocalDate,
@@ -520,9 +500,6 @@ private fun periodLabel(
         SummaryPeriod.MONTH -> date.format(DateTimeFormatter.ofPattern("yyyy年M月"))
         SummaryPeriod.YEAR -> date.format(DateTimeFormatter.ofPattern("yyyy年"))
     }
-
-private fun summaryCategoryLabel(category: CategoryEntity): String =
-    "${if (category.type == TransactionType.INCOME) "収入" else "支出"}・${category.name}"
 
 private fun reportTransactionLabel(type: String): String =
     if (type == TransactionType.INCOME) "収入" else "支出"

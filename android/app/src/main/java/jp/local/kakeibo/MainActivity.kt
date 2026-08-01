@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -118,6 +119,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.view.WindowCompat
 import jp.local.kakeibo.category.orderedByExpenseFrequency
 import jp.local.kakeibo.category.forTransactionType
+import jp.local.kakeibo.category.categoryIcon
 import jp.local.kakeibo.data.CategoryEntity
 import jp.local.kakeibo.data.ExpenseEntity
 import jp.local.kakeibo.data.TransactionType
@@ -270,7 +272,6 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
     var initialExpenseDate by remember { mutableStateOf(LocalDate.now()) }
     var selectedMonthText by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     var selectedDateText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
-    var selectedSummaryCategoryUuid by rememberSaveable { mutableStateOf("") }
     var expenseListScrolling by remember { mutableStateOf(false) }
     val selectedMonth = YearMonth.parse(selectedMonthText)
     val selectedDate = LocalDate.parse(selectedDateText)
@@ -292,15 +293,6 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
             )
         }
     }
-    LaunchedEffect(state.categories, selectedSummaryCategoryUuid) {
-        if (
-            selectedSummaryCategoryUuid.isNotEmpty() &&
-            state.categories.none { it.uuid == selectedSummaryCategoryUuid }
-        ) {
-            selectedSummaryCategoryUuid = ""
-        }
-    }
-
     if (expenseEditorOpen || editingExpense != null) {
         val closeEditor = {
             expenseEditorOpen = false
@@ -355,17 +347,6 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                     icon = { Icon(Icons.Outlined.CalendarMonth, null) },
                     onClick = {
                         summaryOpen = false
-                        graphOpen = false
-                        trashOpen = false
-                        scope.launch { drawerState.close() }
-                    },
-                )
-                NavigationDrawerItem(
-                    label = { Text("サマリー") },
-                    selected = summaryOpen,
-                    icon = { Icon(Icons.Outlined.BarChart, null) },
-                    onClick = {
-                        summaryOpen = true
                         graphOpen = false
                         trashOpen = false
                         scope.launch { drawerState.close() }
@@ -433,6 +414,19 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                                 Icon(Icons.Outlined.Menu, "メニューを開く")
                             }
                         },
+                        actions = {
+                            if (!summaryOpen && !graphOpen && !trashOpen) {
+                                IconButton(
+                                    onClick = {
+                                        summaryOpen = true
+                                        graphOpen = false
+                                        trashOpen = false
+                                    },
+                                ) {
+                                    Icon(Icons.Outlined.BarChart, "レポートを開く")
+                                }
+                            }
+                        },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor =
                                 if (summaryOpen) {
@@ -447,6 +441,12 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                                     MaterialTheme.colorScheme.onSurface
                                 },
                             navigationIconContentColor =
+                                if (summaryOpen) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                            actionIconContentColor =
                                 if (summaryOpen) {
                                     MaterialTheme.colorScheme.onPrimary
                                 } else {
@@ -490,8 +490,6 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                 SummaryScreen(
                     expenses = state.expenses,
                     categories = state.categories,
-                    selectedCategoryUuid = selectedSummaryCategoryUuid,
-                    onCategoryChange = { selectedSummaryCategoryUuid = it },
                     modifier = Modifier.padding(padding),
                 )
             } else if (graphOpen) {
@@ -944,6 +942,13 @@ private fun ExpenseRow(
                     .padding(horizontal = 18.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Icon(
+                imageVector = categoryIcon(categoryName),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp),
+            )
+            Spacer(Modifier.width(14.dp))
             Text(
                 categoryName,
                 style = MaterialTheme.typography.titleMedium,
@@ -1108,6 +1113,11 @@ private fun ExpenseEditorPage(
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("${transactionLabel(type)}カテゴリ") },
+                    leadingIcon = {
+                        availableCategories.find { it.uuid == categoryUuid }?.let { category ->
+                            Icon(categoryIcon(category.name), contentDescription = null)
+                        }
+                    },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(categoryMenuOpen) },
                     modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                 )
@@ -1118,6 +1128,9 @@ private fun ExpenseEditorPage(
                     availableCategories.forEach { category ->
                         DropdownMenuItem(
                             text = { Text(category.name) },
+                            leadingIcon = {
+                                Icon(categoryIcon(category.name), contentDescription = null)
+                            },
                             onClick = {
                                 categoryUuid = category.uuid
                                 categoryMenuOpen = false
@@ -1350,6 +1363,13 @@ private fun CategoryEditorPage(
                         ) {
                             ListItem(
                                 headlineContent = { Text(category.name) },
+                                leadingContent = {
+                                    Icon(
+                                        categoryIcon(category.name),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                },
                                 supportingContent = {
                                     Text(
                                         if (editingCategory?.uuid == category.uuid) {
