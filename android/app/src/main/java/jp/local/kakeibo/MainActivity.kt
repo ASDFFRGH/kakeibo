@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,6 +35,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
@@ -52,6 +54,7 @@ import androidx.compose.material.icons.outlined.ShowChart
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
@@ -268,6 +271,7 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
     var selectedMonthText by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     var selectedDateText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     var selectedSummaryCategoryUuid by rememberSaveable { mutableStateOf("") }
+    var expenseListScrolling by remember { mutableStateOf(false) }
     val selectedMonth = YearMonth.parse(selectedMonthText)
     val selectedDate = LocalDate.parse(selectedDateText)
     val snackbar = remember { SnackbarHostState() }
@@ -311,6 +315,10 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
             onClose = closeEditor,
             onSave = { expense, date, amount, type, categoryUuid, memo ->
                 viewModel.saveExpense(expense, date, amount, type, categoryUuid, memo)
+                closeEditor()
+            },
+            onDelete = { expense ->
+                viewModel.deleteExpense(expense)
                 closeEditor()
             },
         )
@@ -456,8 +464,14 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                             initialExpenseDate = selectedDate
                             expenseEditorOpen = true
                         },
-                        icon = { Icon(Icons.Outlined.Add, null) },
+                        icon = {
+                            Icon(
+                                Icons.Outlined.Add,
+                                if (expenseListScrolling) "収支を追加" else null,
+                            )
+                        },
                         text = { Text("収支を追加") },
+                        expanded = !expenseListScrolling,
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
                     )
@@ -496,11 +510,11 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                         selectedDateText = month.coerceDay(selectedDate.dayOfMonth).toString()
                     },
                     onEdit = { editingExpense = it },
-                    onDelete = viewModel::deleteExpense,
                     selectedDate = selectedDate,
                     onDateClick = { date ->
                         selectedDateText = date.toString()
                     },
+                    onScrollStateChange = { expenseListScrolling = it },
                 )
             }
         }
@@ -592,7 +606,7 @@ private fun ExpenseList(
     onMonthChange: (YearMonth) -> Unit,
     onDateClick: (LocalDate) -> Unit,
     onEdit: (ExpenseEntity) -> Unit,
-    onDelete: (ExpenseEntity) -> Unit,
+    onScrollStateChange: (Boolean) -> Unit,
 ) {
     val pagerAnchorMonth = remember { selectedMonth }
     val pagerState =
@@ -642,7 +656,8 @@ private fun ExpenseList(
                 selectedDate = pageMonth.coerceDay(selectedDate.dayOfMonth),
                 onDateClick = onDateClick,
                 onEdit = onEdit,
-                onDelete = onDelete,
+                isActive = page == pagerState.settledPage,
+                onScrollStateChange = onScrollStateChange,
             )
         }
     }
@@ -655,10 +670,23 @@ private fun ExpenseMonthPage(
     selectedDate: LocalDate,
     onDateClick: (LocalDate) -> Unit,
     onEdit: (ExpenseEntity) -> Unit,
-    onDelete: (ExpenseEntity) -> Unit,
+    isActive: Boolean,
+    onScrollStateChange: (Boolean) -> Unit,
 ) {
     val visibleExpenses = state.expenses.monthlyExpenses(month)
     val selectedExpenses = visibleExpenses.filter { it.date == selectedDate.toString() }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(listState, isActive, selectedExpenses.isEmpty()) {
+        if (!isActive) return@LaunchedEffect
+        if (selectedExpenses.isEmpty()) {
+            onScrollStateChange(false)
+            return@LaunchedEffect
+        }
+        snapshotFlow { listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect(onScrollStateChange)
+    }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Card(
@@ -703,13 +731,22 @@ private fun ExpenseMonthPage(
                 }
             }
         } else {
-            LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 8.dp)) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.weight(1f),
+                contentPadding =
+                    PaddingValues(
+                        start = 12.dp,
+                        top = 8.dp,
+                        end = 12.dp,
+                        bottom = 96.dp,
+                    ),
+            ) {
                 items(selectedExpenses, key = { it.uuid }) { expense ->
                     ExpenseRow(
                         expense = expense,
                         categories = state.categories,
                         onEdit = { onEdit(expense) },
-                        onDelete = { onDelete(expense) },
                     )
                 }
             }
@@ -874,32 +911,63 @@ private fun ExpenseRow(
     expense: ExpenseEntity,
     categories: List<CategoryEntity>,
     onEdit: () -> Unit,
-    onDelete: () -> Unit,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        ListItem(
-            headlineContent = { Text(expense.memo.ifBlank { transactionLabel(expense.type) }) },
-            supportingContent = {
-                val categoryName = categories.find { it.uuid == expense.categoryUuid }?.name ?: "未分類"
-                Text("${expense.date}  $categoryName")
-            },
-            trailingContent = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "%s%,d円".format(if (expense.type == TransactionType.INCOME) "+" else "-", expense.amount),
-                        color = if (expense.type == TransactionType.INCOME) incomeColor() else expenseColor(),
-                        fontWeight = FontWeight.Bold,
-                    )
-                    IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, "編集") }
-                    IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, "削除") }
-                }
-            },
+    val categoryName = categories.find { it.uuid == expense.categoryUuid }?.name ?: "未分類"
+    val amountLabel =
+        "%s%,d円".format(
+            if (expense.type == TransactionType.INCOME) "+" else "-",
+            expense.amount,
         )
+    Card(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+                .clickable(
+                    onClickLabel = "${categoryName}を編集",
+                    onClick = onEdit,
+                ),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = categoryPastelColor(expense.categoryUuid)),
+        border =
+            BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
+            ),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 72.dp)
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                categoryName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                amountLabel,
+                style = MaterialTheme.typography.titleLarge,
+                color =
+                    if (expense.type == TransactionType.INCOME) {
+                        incomeColor()
+                    } else {
+                        expenseColor()
+                    },
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                Icons.Outlined.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -912,6 +980,7 @@ private fun ExpenseEditorPage(
     initialCategoryUuid: String,
     onClose: () -> Unit,
     onSave: (ExpenseEntity?, LocalDate, Long, String, String, String) -> Unit,
+    onDelete: (ExpenseEntity) -> Unit,
 ) {
     var date by remember { mutableStateOf(current?.date?.let(LocalDate::parse) ?: initialDate) }
     var amount by remember { mutableStateOf(current?.amount?.toString().orEmpty()) }
@@ -930,13 +999,16 @@ private fun ExpenseEditorPage(
     }
     var memo by remember { mutableStateOf(current?.memo.orEmpty()) }
     var categoryMenuOpen by remember { mutableStateOf(false) }
+    var deleteConfirmationOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val amountFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(amountFocusRequester) {
-        amountFocusRequester.requestFocus()
-        keyboardController?.show()
+        if (current == null) {
+            amountFocusRequester.requestFocus()
+            keyboardController?.show()
+        }
     }
 
     Scaffold(
@@ -1074,6 +1146,21 @@ private fun ExpenseEditorPage(
             ) {
                 Text("保存")
             }
+            if (current != null) {
+                OutlinedButton(
+                    onClick = { deleteConfirmationOpen = true },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                    colors =
+                        ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                ) {
+                    Icon(Icons.Outlined.Delete, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("この収支を削除")
+                }
+            }
             Image(
                 painter = painterResource(R.drawable.spicky_mascot),
                 contentDescription = "スピッキー",
@@ -1082,6 +1169,32 @@ private fun ExpenseEditorPage(
             )
         }
     }
+    if (deleteConfirmationOpen && current != null) {
+        AlertDialog(
+            onDismissRequest = { deleteConfirmationOpen = false },
+            title = { Text("収支を削除") },
+            text = { Text("この収支を削除しますか？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deleteConfirmationOpen = false
+                        onDelete(current)
+                    },
+                    colors =
+                        ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                ) {
+                    Text("削除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteConfirmationOpen = false }) {
+                    Text("キャンセル")
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -1089,6 +1202,21 @@ private fun incomeColor(): Color = Color(0xFF176B4D)
 
 @Composable
 private fun expenseColor(): Color = MaterialTheme.colorScheme.error
+
+private val categoryPastelPalette =
+    listOf(
+        Color(0xFFE7F4EC),
+        Color(0xFFFFF3D6),
+        Color(0xFFF0EBFA),
+        Color(0xFFE7F1FA),
+        Color(0xFFFAE9E7),
+        Color(0xFFE3F4F2),
+        Color(0xFFF6EBDD),
+        Color(0xFFECEEF8),
+    )
+
+private fun categoryPastelColor(uuid: String): Color =
+    categoryPastelPalette[Math.floorMod(uuid.hashCode(), categoryPastelPalette.size)]
 
 private fun transactionLabel(type: String): String =
     if (type == TransactionType.INCOME) "収入" else "支出"

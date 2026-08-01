@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   Pencil,
   Plus,
   RefreshCw,
@@ -118,16 +119,22 @@ export default function Home() {
           </div>
           <small>{expenses.length}件</small>
         </div>
-        <button
-          className="primary"
-          onClick={() => {
-            setEditing(null);
-            setDialog("expense");
-          }}
-        >
-          <Plus size={19} />
-          収支を追加
-        </button>
+        <nav className="summary-actions" aria-label="収支の入力">
+          <Link className="secondary" href="/monthly-entry">
+            <ClipboardList size={18} />
+            まとめて入力
+          </Link>
+          <button
+            className="primary"
+            onClick={() => {
+              setEditing(null);
+              setDialog("expense");
+            }}
+          >
+            <Plus size={19} />
+            収支を追加
+          </button>
+        </nav>
       </section>
       <section className="toolbar">
         <div className="month">

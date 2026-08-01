@@ -16,6 +16,10 @@ type Repository struct{ db *pgxpool.Pool }
 
 func New(db *pgxpool.Pool) *Repository { return &Repository{db: db} }
 
+type expenseQuerier interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
 func (r *Repository) ListCategories(ctx context.Context, includeDeleted bool) ([]model.Category, error) {
 	where := "WHERE deleted_at IS NULL"
 	if includeDeleted {
@@ -123,18 +127,26 @@ func (r *Repository) ListExpenses(ctx context.Context, from, to, category string
 	return items, rows.Err()
 }
 func (r *Repository) GetExpense(ctx context.Context, id string) (model.Expense, error) {
+	return getExpense(ctx, r.db, id)
+}
+func getExpense(ctx context.Context, db expenseQuerier, id string) (model.Expense, error) {
 	var x model.Expense
 	var d time.Time
-	err := r.db.QueryRow(ctx, `SELECT uuid,expense_date,amount,transaction_type,category_uuid,memo,created_at,updated_at,deleted_at FROM expenses WHERE uuid=$1`, id).Scan(&x.UUID, &d, &x.Amount, &x.Type, &x.CategoryUUID, &x.Memo, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt)
+	err := db.QueryRow(ctx, `SELECT uuid,expense_date,amount,transaction_type,category_uuid,memo,created_at,updated_at,deleted_at FROM expenses WHERE uuid=$1`, id).Scan(&x.UUID, &d, &x.Amount, &x.Type, &x.CategoryUUID, &x.Memo, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = ErrNotFound
 	}
-	x.Date = d.Format("2006-01-02")
+	if err == nil {
+		x.Date = d.Format("2006-01-02")
+	}
 	return x, err
 }
 func (r *Repository) SaveExpense(ctx context.Context, x model.Expense) (model.Expense, error) {
+	return saveExpense(ctx, r.db, x)
+}
+func saveExpense(ctx context.Context, db expenseQuerier, x model.Expense) (model.Expense, error) {
 	if x.Type == "" {
-		existing, err := r.GetExpense(ctx, x.UUID)
+		existing, err := getExpense(ctx, db, x.UUID)
 		if err == nil {
 			x.Type = existing.Type
 		} else if errors.Is(err, ErrNotFound) {
@@ -151,14 +163,36 @@ func (r *Repository) SaveExpense(ctx context.Context, x model.Expense) (model.Ex
 		x.UpdatedAt = now
 	}
 	var d time.Time
-	err := r.db.QueryRow(ctx, `INSERT INTO expenses(uuid,expense_date,amount,transaction_type,category_uuid,memo,created_at,updated_at,deleted_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+	err := db.QueryRow(ctx, `INSERT INTO expenses(uuid,expense_date,amount,transaction_type,category_uuid,memo,created_at,updated_at,deleted_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
 	ON CONFLICT(uuid) DO UPDATE SET expense_date=EXCLUDED.expense_date,amount=EXCLUDED.amount,transaction_type=EXCLUDED.transaction_type,category_uuid=EXCLUDED.category_uuid,memo=EXCLUDED.memo,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
 	WHERE expenses.updated_at < EXCLUDED.updated_at RETURNING uuid,expense_date,amount,transaction_type,category_uuid,memo,created_at,updated_at,deleted_at`, x.UUID, x.Date, x.Amount, x.Type, x.CategoryUUID, x.Memo, x.CreatedAt, x.UpdatedAt, x.DeletedAt).Scan(&x.UUID, &d, &x.Amount, &x.Type, &x.CategoryUUID, &x.Memo, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return r.GetExpense(ctx, x.UUID)
+		return getExpense(ctx, db, x.UUID)
 	}
-	x.Date = d.Format("2006-01-02")
+	if err == nil {
+		x.Date = d.Format("2006-01-02")
+	}
 	return x, err
+}
+func (r *Repository) SaveExpenses(ctx context.Context, expenses []model.Expense) ([]model.Expense, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	saved := make([]model.Expense, 0, len(expenses))
+	for _, expense := range expenses {
+		item, saveErr := saveExpense(ctx, tx, expense)
+		if saveErr != nil {
+			return nil, saveErr
+		}
+		saved = append(saved, item)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return saved, nil
 }
 func (r *Repository) DeleteExpense(ctx context.Context, id string) error {
 	tag, err := r.db.Exec(ctx, `UPDATE expenses SET deleted_at=NOW(),updated_at=NOW() WHERE uuid=$1 AND deleted_at IS NULL`, id)

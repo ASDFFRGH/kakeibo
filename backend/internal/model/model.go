@@ -28,6 +28,10 @@ type Expense struct {
 	DeletedAt    *time.Time `json:"deleted_at"`
 }
 
+type BatchExpenseRequest struct {
+	Expenses []Expense `json:"expenses"`
+}
+
 type SyncRequest struct {
 	LastSyncedAt *time.Time `json:"last_synced_at"`
 	Categories   []Category `json:"categories"`

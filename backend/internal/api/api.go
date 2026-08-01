@@ -44,6 +44,7 @@ func New(repo *repository.Repository, cors string) http.Handler {
 	mux.HandleFunc("GET /api/v1/expenses", a.listExpenses)
 	mux.HandleFunc("GET /api/v1/expenses/{uuid}", a.getExpense)
 	mux.HandleFunc("POST /api/v1/expenses", a.createExpense)
+	mux.HandleFunc("POST /api/v1/expenses/batch", a.createExpensesBatch)
 	mux.HandleFunc("PUT /api/v1/expenses/{uuid}", a.updateExpense)
 	mux.HandleFunc("DELETE /api/v1/expenses/{uuid}", a.deleteExpense)
 	mux.HandleFunc("GET /api/v1/trash", a.listTrash)
@@ -191,6 +192,25 @@ func (a *API) createExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, 201, map[string]any{"success": true, "data": x})
+}
+func (a *API) createExpensesBatch(w http.ResponseWriter, r *http.Request) {
+	var req model.BatchExpenseRequest
+	if decode(r, &req) != nil || len(req.Expenses) == 0 || len(req.Expenses) > 100 {
+		fail(w, 400, "invalid expense batch")
+		return
+	}
+	for _, x := range req.Expenses {
+		if validExpense(x) != nil {
+			fail(w, 400, "invalid expense in batch")
+			return
+		}
+	}
+	saved, err := a.repo.SaveExpenses(r.Context(), req.Expenses)
+	if err != nil {
+		a.handleErr(w, err)
+		return
+	}
+	write(w, 201, map[string]any{"success": true, "data": saved})
 }
 func (a *API) updateExpense(w http.ResponseWriter, r *http.Request) {
 	var x model.Expense

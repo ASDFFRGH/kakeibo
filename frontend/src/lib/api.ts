@@ -1,6 +1,7 @@
 export type Category = {
   uuid: string;
   name: string;
+  type: "expense" | "income";
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -88,6 +89,16 @@ export const api = {
             }
           : x,
       ),
+    }),
+  saveExpenses: (
+    expenses: Pick<
+      Expense,
+      "uuid" | "date" | "amount" | "type" | "category_uuid" | "memo"
+    >[],
+  ) =>
+    request<Expense[]>("/expenses/batch", {
+      method: "POST",
+      body: JSON.stringify({ expenses }),
     }),
   deleteExpense: (id: string) =>
     request<void>(`/expenses/${id}`, { method: "DELETE" }),
