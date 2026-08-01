@@ -90,6 +90,9 @@ func validCategory(x model.Category) error {
 	if !validUUID(x.UUID) || strings.TrimSpace(x.Name) == "" {
 		return errors.New("uuid and name are required")
 	}
+	if x.Type != "" && x.Type != model.TransactionTypeExpense && x.Type != model.TransactionTypeIncome {
+		return errors.New("type must be expense or income")
+	}
 	return nil
 }
 func validExpense(x model.Expense) error {

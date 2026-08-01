@@ -1,31 +1,43 @@
 package jp.local.kakeibo
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ChevronLeft
-import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.DirectionsTransit
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.MedicalServices
+import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Restaurant
+import androidx.compose.material.icons.outlined.Savings
+import androidx.compose.material.icons.outlined.SportsEsports
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,18 +47,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import jp.local.kakeibo.data.CategoryEntity
 import jp.local.kakeibo.data.ExpenseEntity
 import jp.local.kakeibo.data.TransactionType
+import jp.local.kakeibo.summary.CategorySummary
 import jp.local.kakeibo.summary.SummaryCalculator
 import jp.local.kakeibo.summary.SummaryPeriod
 import jp.local.kakeibo.summary.SummaryResult
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SummaryScreen(
     expenses: List<ExpenseEntity>,
@@ -57,50 +76,169 @@ fun SummaryScreen(
 ) {
     var period by remember { mutableStateOf(SummaryPeriod.MONTH) }
     var anchorDate by remember { mutableStateOf(LocalDate.now()) }
+    var transactionType by remember { mutableStateOf(TransactionType.EXPENSE) }
     var categoryMenuOpen by remember { mutableStateOf(false) }
-    val visibleExpenses = remember(expenses, selectedCategoryUuid) {
-        expenses.filter { selectedCategoryUuid.isEmpty() || it.categoryUuid == selectedCategoryUuid }
-    }
-    val summary = remember(period, anchorDate, visibleExpenses) {
-        SummaryCalculator.calculate(period, anchorDate, visibleExpenses)
-    }
+    val visibleExpenses =
+        remember(expenses, selectedCategoryUuid) {
+            expenses.filter { selectedCategoryUuid.isEmpty() || it.categoryUuid == selectedCategoryUuid }
+        }
+    val summary =
+        remember(period, anchorDate, visibleExpenses) {
+            SummaryCalculator.calculate(period, anchorDate, visibleExpenses)
+        }
+    val breakdown =
+        remember(summary, categories, transactionType) {
+            summary.categories
+                .mapNotNull { categorySummary ->
+                    categorySummary.toBreakdownItem(categories, transactionType)
+                }.sortedByDescending { it.amount }
+        }
 
-    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            SummaryPeriod.entries.forEach { option ->
-                FilterChip(
-                    selected = period == option,
-                    onClick = { period = option },
-                    label = { Text(option.displayName) },
+    LazyColumn(
+        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        contentPadding = PaddingValues(bottom = 28.dp),
+    ) {
+        item {
+            PeriodStrip(
+                period = period,
+                anchorDate = anchorDate,
+                onAnchorChange = { anchorDate = it },
+            )
+        }
+        item {
+            ReportControls(
+                period = period,
+                onPeriodChange = {
+                    period = it
+                    anchorDate = LocalDate.now()
+                },
+                transactionType = transactionType,
+                onTransactionTypeChange = { transactionType = it },
+                categories = categories,
+                selectedCategoryUuid = selectedCategoryUuid,
+                categoryMenuOpen = categoryMenuOpen,
+                onCategoryMenuChange = { categoryMenuOpen = it },
+                onCategoryChange = onCategoryChange,
+            )
+        }
+        item {
+            ReportOverview(
+                summary = summary,
+                transactionType = transactionType,
+                breakdown = breakdown,
+            )
+        }
+        item {
+            Text(
+                text = if (transactionType == TransactionType.EXPENSE) "支出の内訳" else "収入の内訳",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+            )
+        }
+        if (breakdown.isEmpty()) {
+            item {
+                Text(
+                    text = "この期間の${reportTransactionLabel(transactionType)}はありません",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 40.dp),
+                )
+            }
+        } else {
+            items(breakdown, key = { it.categoryUuid }) { item ->
+                BreakdownRow(item = item, total = breakdown.sumOf { it.amount })
+            }
+        }
+    }
+}
+
+@Composable
+private fun PeriodStrip(
+    period: SummaryPeriod,
+    anchorDate: LocalDate,
+    onAnchorChange: (LocalDate) -> Unit,
+) {
+    val dates = listOf(period.shift(anchorDate, -1), anchorDate, period.shift(anchorDate, 1))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(top = 8.dp),
+    ) {
+        dates.forEachIndexed { index, date ->
+            val selected = index == 1
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(enabled = !selected) { onAnchorChange(date) }
+                    .padding(top = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = periodLabel(period, date),
+                    color =
+                        if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.height(12.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        ),
                 )
             }
         }
-        ExposedDropdownMenuBox(
-            expanded = categoryMenuOpen,
-            onExpandedChange = { categoryMenuOpen = !categoryMenuOpen },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        ) {
+    }
+}
+
+@Composable
+private fun ReportControls(
+    period: SummaryPeriod,
+    onPeriodChange: (SummaryPeriod) -> Unit,
+    transactionType: String,
+    onTransactionTypeChange: (String) -> Unit,
+    categories: List<CategoryEntity>,
+    selectedCategoryUuid: String,
+    categoryMenuOpen: Boolean,
+    onCategoryMenuChange: (Boolean) -> Unit,
+    onCategoryChange: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        ReportSegmentedControl(
+            selectedType = transactionType,
+            onSelectedTypeChange = onTransactionTypeChange,
+            modifier = Modifier.weight(1f),
+        )
+        Box {
             val selectedCategory = categories.find { it.uuid == selectedCategoryUuid }
-            OutlinedTextField(
-                value = selectedCategory?.let(::summaryCategoryLabel) ?: "すべてのカテゴリ",
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("カテゴリで絞り込み") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(categoryMenuOpen) },
-                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+            FilterChip(
+                selected = selectedCategoryUuid.isNotEmpty(),
+                onClick = { onCategoryMenuChange(true) },
+                label = { Text(selectedCategory?.name ?: "カテゴリ") },
             )
-            ExposedDropdownMenu(
+            DropdownMenu(
                 expanded = categoryMenuOpen,
-                onDismissRequest = { categoryMenuOpen = false },
+                onDismissRequest = { onCategoryMenuChange(false) },
             ) {
                 DropdownMenuItem(
                     text = { Text("すべてのカテゴリ") },
                     onClick = {
                         onCategoryChange("")
-                        categoryMenuOpen = false
+                        onCategoryMenuChange(false)
                     },
                 )
                 categories.forEach { category ->
@@ -108,172 +246,323 @@ fun SummaryScreen(
                         text = { Text(summaryCategoryLabel(category)) },
                         onClick = {
                             onCategoryChange(category.uuid)
-                            categoryMenuOpen = false
+                            onCategoryMenuChange(false)
                         },
                     )
                 }
             }
         }
-        PeriodNavigator(
-            summary = summary,
-            onPrevious = { anchorDate = period.shift(anchorDate, -1) },
-            onNext = { anchorDate = period.shift(anchorDate, 1) },
+        FilterChip(
+            selected = period == SummaryPeriod.YEAR,
+            onClick = {
+                onPeriodChange(
+                    if (period == SummaryPeriod.MONTH) SummaryPeriod.YEAR else SummaryPeriod.MONTH,
+                )
+            },
+            label = { Text(if (period == SummaryPeriod.MONTH) "月" else "年") },
         )
-        SummaryTotal(summary)
-        if (summary.expenseCount + summary.incomeCount == 0) {
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+    }
+}
+
+@Composable
+private fun ReportSegmentedControl(
+    selectedType: String,
+    onSelectedTypeChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row {
+            listOf(TransactionType.EXPENSE to "支出", TransactionType.INCOME to "収入").forEach { (type, label) ->
+                val selected = selectedType == type
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(
+                            if (selected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                Color.Transparent
+                            },
+                        ).clickable { onSelectedTypeChange(type) }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text("この期間の収支はありません", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        } else {
-            LazyColumn(Modifier.padding(horizontal = 12.dp)) {
-                item {
                     Text(
-                        "カテゴリ別",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                MaterialTheme.colorScheme.secondaryContainer,
-                                RoundedCornerShape(12.dp),
-                            )
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        label,
+                        color =
+                            if (selected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                     )
                 }
-                items(summary.categories, key = { it.categoryUuid }) { categorySummary ->
-                    val category = categories.find { it.uuid == categorySummary.categoryUuid }
-                    val isIncome =
-                        category?.type == TransactionType.INCOME ||
-                            (
-                                category == null &&
-                                    categorySummary.incomeAmount > 0 &&
-                                    categorySummary.expenseAmount == 0L
-                            )
-                    val amount = if (isIncome) categorySummary.incomeAmount else categorySummary.expenseAmount
-                    val count = if (isIncome) categorySummary.incomeCount else categorySummary.expenseCount
-                    val tileColor =
-                        if (isIncome) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.errorContainer
-                        }
-                    val tileContentColor =
-                        if (isIncome) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        }
-                    val tileBorderColor =
-                        if (isIncome) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.error
-                        }
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors =
-                            CardDefaults.cardColors(
-                                containerColor = tileColor,
-                                contentColor = tileContentColor,
-                            ),
-                        border = BorderStroke(1.dp, tileBorderColor),
-                    ) {
-                        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
-                            Text(
-                                category?.name ?: "不明なカテゴリ",
-                                fontWeight = FontWeight.Medium,
-                            )
-                            Text(
-                                "${if (isIncome) "+" else "-"}%,d円  ${count}件".format(amount),
-                                color = if (isIncome) incomeColor else MaterialTheme.colorScheme.error,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.align(Alignment.End),
-                            )
-                        }
-                    }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReportOverview(
+    summary: SummaryResult,
+    transactionType: String,
+    breakdown: List<BreakdownItem>,
+) {
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        val chartSize = if (maxWidth < 360.dp) 148.dp else 176.dp
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            DonutChart(
+                items = breakdown,
+                transactionType = transactionType,
+                size = chartSize,
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                SummaryMetric("収入", summary.totalIncome, ReportIncomeColor)
+                SummaryMetric("支出", summary.totalExpense, ReportExpenseColor)
+                SummaryMetric(
+                    "収支",
+                    summary.balance,
+                    if (summary.balance >= 0) ReportIncomeColor else ReportExpenseColor,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DonutChart(
+    items: List<BreakdownItem>,
+    transactionType: String,
+    size: Dp,
+) {
+    val total = items.sumOf { it.amount }
+    val segments = remember(items) { donutSegments(items) }
+    val chartDescription =
+        if (items.isEmpty()) {
+            "${reportTransactionLabel(transactionType)}の内訳なし"
+        } else {
+            items.joinToString(
+                prefix = "${reportTransactionLabel(transactionType)}の内訳。 ",
+                separator = "、",
+            ) { "${it.name} ${formatCurrency(it.amount)}" }
+        }
+    Box(
+        modifier = Modifier.size(size).semantics { contentDescription = chartDescription },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.fillMaxSize().padding(14.dp)) {
+            val strokeWidth = 30.dp.toPx()
+            if (total == 0L) {
+                drawArc(
+                    color = ReportChartTrack,
+                    startAngle = -90f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    style = Stroke(strokeWidth, cap = StrokeCap.Butt),
+                )
+            } else {
+                var startAngle = -90f
+                segments.forEach { segment ->
+                    val sweep = segment.amount.toFloat() / total.toFloat() * 360f
+                    drawArc(
+                        color = segment.color,
+                        startAngle = startAngle,
+                        sweepAngle = (sweep - 1f).coerceAtLeast(0.5f),
+                        useCenter = false,
+                        style = Stroke(strokeWidth, cap = StrokeCap.Butt),
+                    )
+                    startAngle += sweep
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun PeriodNavigator(
-    summary: SummaryResult,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            IconButton(onClick = onPrevious) { Icon(Icons.Outlined.ChevronLeft, "前の期間") }
-            Text(periodLabel(summary), fontWeight = FontWeight.Bold)
-            IconButton(onClick = onNext) { Icon(Icons.Outlined.ChevronRight, "次の期間") }
-        }
-    }
-}
-
-@Composable
-private fun SummaryTotal(summary: SummaryResult) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-    ) {
-        Column(Modifier.fillMaxWidth().padding(20.dp)) {
-            Text("期間の差引", style = MaterialTheme.typography.labelLarge)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                "%,d円".format(summary.balance),
-                style = MaterialTheme.typography.headlineMedium,
+                reportTransactionLabel(transactionType),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                compactCurrency(total),
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("収入 +%,d円（${summary.incomeCount}件）".format(summary.totalIncome), color = incomeColor)
-                Text(
-                    "支出 -%,d円（${summary.expenseCount}件）".format(summary.totalExpense),
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            Text(dateRange(summary), style = MaterialTheme.typography.bodySmall)
         }
     }
 }
 
-private fun periodLabel(summary: SummaryResult): String =
-    when (summary.period) {
-        SummaryPeriod.MONTH -> summary.anchorDate.format(DateTimeFormatter.ofPattern("yyyy年M月"))
-        SummaryPeriod.YEAR -> summary.anchorDate.format(DateTimeFormatter.ofPattern("yyyy年"))
+@Composable
+private fun SummaryMetric(
+    label: String,
+    amount: Long,
+    color: Color,
+) {
+    Column(horizontalAlignment = Alignment.End, modifier = Modifier.fillMaxWidth()) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+        Text(
+            formatCurrency(amount),
+            color = color,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun BreakdownRow(
+    item: BreakdownItem,
+    total: Long,
+) {
+    val percentage = if (total == 0L) 0 else (item.amount * 100 / total).toInt()
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier.size(48.dp).background(item.color, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = categoryIcon(item.name),
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(26.dp),
+            )
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(item.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+            Text(
+                "$percentage% ・ ${item.count}件",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Text(
+            text = "${if (item.transactionType == TransactionType.EXPENSE) "-" else "+"}${formatCurrency(item.amount)}",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 82.dp, end = 20.dp),
+        color = MaterialTheme.colorScheme.outlineVariant,
+    )
+}
+
+private fun CategorySummary.toBreakdownItem(
+    categories: List<CategoryEntity>,
+    transactionType: String,
+): BreakdownItem? {
+    val amount = if (transactionType == TransactionType.INCOME) incomeAmount else expenseAmount
+    if (amount <= 0) return null
+    val count = if (transactionType == TransactionType.INCOME) incomeCount else expenseCount
+    val category = categories.find { it.uuid == categoryUuid }
+    return BreakdownItem(
+        categoryUuid = categoryUuid,
+        name = category?.name ?: "不明なカテゴリ",
+        amount = amount,
+        count = count,
+        transactionType = transactionType,
+        color = categoryColor(categoryUuid),
+    )
+}
+
+private fun donutSegments(items: List<BreakdownItem>): List<DonutSegment> {
+    if (items.size <= 6) {
+        return items.map { DonutSegment(it.name, it.amount, it.color) }
+    }
+    val primary = items.take(5).map { DonutSegment(it.name, it.amount, it.color) }
+    val other = DonutSegment("その他", items.drop(5).sumOf { it.amount }, ReportOtherColor)
+    return primary + other
+}
+
+private fun categoryColor(categoryUuid: String): Color {
+    val index = ((categoryUuid.hashCode().toLong() and 0x7fffffff) % ReportPalette.size).toInt()
+    return ReportPalette[index]
+}
+
+private fun categoryIcon(name: String): ImageVector =
+    when {
+        name.contains("食") -> Icons.Outlined.Restaurant
+        name.contains("家") || name.contains("住宅") -> Icons.Outlined.Home
+        name.contains("医療") || name.contains("病院") -> Icons.Outlined.MedicalServices
+        name.contains("娯楽") || name.contains("ゲーム") -> Icons.Outlined.SportsEsports
+        name.contains("通信") || name.contains("スマホ") -> Icons.Outlined.PhoneAndroid
+        name.contains("交通") || name.contains("電車") -> Icons.Outlined.DirectionsTransit
+        name.contains("電気") || name.contains("光熱") -> Icons.Outlined.Bolt
+        name.contains("NISA") || name.contains("投資") || name.contains("貯蓄") -> Icons.Outlined.Savings
+        name.contains("給与") || name.contains("収入") -> Icons.Outlined.Payments
+        else -> Icons.Outlined.Category
     }
 
-private fun dateRange(summary: SummaryResult): String =
-    if (summary.from == summary.to) {
-        summary.from.toString()
-    } else {
-        "${summary.from}〜${summary.to}"
-}
+private fun periodLabel(
+    period: SummaryPeriod,
+    date: LocalDate,
+): String =
+    when (period) {
+        SummaryPeriod.MONTH -> date.format(DateTimeFormatter.ofPattern("yyyy年M月"))
+        SummaryPeriod.YEAR -> date.format(DateTimeFormatter.ofPattern("yyyy年"))
+    }
 
 private fun summaryCategoryLabel(category: CategoryEntity): String =
     "${if (category.type == TransactionType.INCOME) "収入" else "支出"}・${category.name}"
 
-private val incomeColor = Color(0xFF176B4D)
+private fun reportTransactionLabel(type: String): String =
+    if (type == TransactionType.INCOME) "収入" else "支出"
+
+private fun formatCurrency(amount: Long): String = "%,d円".format(amount)
+
+private fun compactCurrency(amount: Long): String =
+    when {
+        amount >= 100_000_000 -> "%.1f億円".format(amount / 100_000_000.0)
+        amount >= 10_000 -> "%.1f万円".format(amount / 10_000.0)
+        else -> formatCurrency(amount)
+    }
+
+private data class BreakdownItem(
+    val categoryUuid: String,
+    val name: String,
+    val amount: Long,
+    val count: Int,
+    val transactionType: String,
+    val color: Color,
+)
+
+private data class DonutSegment(
+    val name: String,
+    val amount: Long,
+    val color: Color,
+)
+
+private val ReportIncomeColor = Color(0xFF1976D2)
+private val ReportExpenseColor = Color(0xFFE13D35)
+private val ReportChartTrack = Color(0xFFE5E7EB)
+private val ReportOtherColor = Color(0xFF8A94A6)
+private val ReportPalette =
+    listOf(
+        Color(0xFFF04438),
+        Color(0xFFE91E63),
+        Color(0xFFFFC928),
+        Color(0xFF009F92),
+        Color(0xFF159DE4),
+        Color(0xFF673AB7),
+        Color(0xFFB8D622),
+        Color(0xFFEF6C00),
+    )

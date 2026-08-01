@@ -21,7 +21,7 @@ func (r *Repository) ListCategories(ctx context.Context, includeDeleted bool) ([
 	if includeDeleted {
 		where = ""
 	}
-	rows, err := r.db.Query(ctx, `SELECT uuid,name,created_at,updated_at,deleted_at FROM categories `+where+` ORDER BY name`)
+	rows, err := r.db.Query(ctx, `SELECT uuid,name,transaction_type,created_at,updated_at,deleted_at FROM categories `+where+` ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +29,7 @@ func (r *Repository) ListCategories(ctx context.Context, includeDeleted bool) ([
 	items := []model.Category{}
 	for rows.Next() {
 		var x model.Category
-		if err := rows.Scan(&x.UUID, &x.Name, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt); err != nil {
+		if err := rows.Scan(&x.UUID, &x.Name, &x.Type, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, x)
@@ -37,6 +37,16 @@ func (r *Repository) ListCategories(ctx context.Context, includeDeleted bool) ([
 	return items, rows.Err()
 }
 func (r *Repository) SaveCategory(ctx context.Context, x model.Category) (model.Category, error) {
+	if x.Type == "" {
+		existing, err := r.GetCategory(ctx, x.UUID)
+		if err == nil {
+			x.Type = existing.Type
+		} else if errors.Is(err, ErrNotFound) {
+			x.Type = model.TransactionTypeExpense
+		} else {
+			return model.Category{}, err
+		}
+	}
 	now := time.Now().UTC()
 	if x.CreatedAt.IsZero() {
 		x.CreatedAt = now
@@ -44,9 +54,9 @@ func (r *Repository) SaveCategory(ctx context.Context, x model.Category) (model.
 	if x.UpdatedAt.IsZero() {
 		x.UpdatedAt = now
 	}
-	err := r.db.QueryRow(ctx, `INSERT INTO categories(uuid,name,created_at,updated_at,deleted_at) VALUES($1,$2,$3,$4,$5)
-	ON CONFLICT(uuid) DO UPDATE SET name=EXCLUDED.name,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
-	WHERE categories.updated_at < EXCLUDED.updated_at RETURNING uuid,name,created_at,updated_at,deleted_at`, x.UUID, x.Name, x.CreatedAt, x.UpdatedAt, x.DeletedAt).Scan(&x.UUID, &x.Name, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt)
+	err := r.db.QueryRow(ctx, `INSERT INTO categories(uuid,name,transaction_type,created_at,updated_at,deleted_at) VALUES($1,$2,$3,$4,$5,$6)
+	ON CONFLICT(uuid) DO UPDATE SET name=EXCLUDED.name,transaction_type=EXCLUDED.transaction_type,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
+	WHERE categories.updated_at < EXCLUDED.updated_at RETURNING uuid,name,transaction_type,created_at,updated_at,deleted_at`, x.UUID, x.Name, x.Type, x.CreatedAt, x.UpdatedAt, x.DeletedAt).Scan(&x.UUID, &x.Name, &x.Type, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r.GetCategory(ctx, x.UUID)
 	}
@@ -54,7 +64,7 @@ func (r *Repository) SaveCategory(ctx context.Context, x model.Category) (model.
 }
 func (r *Repository) GetCategory(ctx context.Context, id string) (model.Category, error) {
 	var x model.Category
-	err := r.db.QueryRow(ctx, `SELECT uuid,name,created_at,updated_at,deleted_at FROM categories WHERE uuid=$1`, id).Scan(&x.UUID, &x.Name, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt)
+	err := r.db.QueryRow(ctx, `SELECT uuid,name,transaction_type,created_at,updated_at,deleted_at FROM categories WHERE uuid=$1`, id).Scan(&x.UUID, &x.Name, &x.Type, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = ErrNotFound
 	}
@@ -69,7 +79,7 @@ func (r *Repository) DeleteCategory(ctx context.Context, id string) error {
 }
 
 func (r *Repository) ListDeletedCategories(ctx context.Context) ([]model.Category, error) {
-	rows, err := r.db.Query(ctx, `SELECT uuid,name,created_at,updated_at,deleted_at FROM categories WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC`)
+	rows, err := r.db.Query(ctx, `SELECT uuid,name,transaction_type,created_at,updated_at,deleted_at FROM categories WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +87,7 @@ func (r *Repository) ListDeletedCategories(ctx context.Context) ([]model.Categor
 	items := []model.Category{}
 	for rows.Next() {
 		var x model.Category
-		if err := rows.Scan(&x.UUID, &x.Name, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt); err != nil {
+		if err := rows.Scan(&x.UUID, &x.Name, &x.Type, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, x)
@@ -199,7 +209,7 @@ func (r *Repository) Changes(ctx context.Context, since time.Time) (model.SyncDa
 	return model.SyncData{Categories: cats, Expenses: exps}, err
 }
 func (r *Repository) changedCategories(ctx context.Context, since time.Time) ([]model.Category, error) {
-	rows, err := r.db.Query(ctx, `SELECT uuid,name,created_at,updated_at,deleted_at FROM categories WHERE updated_at >= $1`, since)
+	rows, err := r.db.Query(ctx, `SELECT uuid,name,transaction_type,created_at,updated_at,deleted_at FROM categories WHERE updated_at >= $1`, since)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +217,7 @@ func (r *Repository) changedCategories(ctx context.Context, since time.Time) ([]
 	a := []model.Category{}
 	for rows.Next() {
 		var x model.Category
-		if err := rows.Scan(&x.UUID, &x.Name, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt); err != nil {
+		if err := rows.Scan(&x.UUID, &x.Name, &x.Type, &x.CreatedAt, &x.UpdatedAt, &x.DeletedAt); err != nil {
 			return nil, err
 		}
 		a = append(a, x)
