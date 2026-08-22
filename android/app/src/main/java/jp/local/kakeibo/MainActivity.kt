@@ -39,6 +39,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -293,6 +294,11 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
             )
         }
     }
+
+    BackHandler(enabled = summaryOpen) {
+        summaryOpen = false
+    }
+
     if (expenseEditorOpen || editingExpense != null) {
         val closeEditor = {
             expenseEditorOpen = false
@@ -410,8 +416,14 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                             }
                         },
                         navigationIcon = {
-                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                Icon(Icons.Outlined.Menu, "メニューを開く")
+                            if (summaryOpen) {
+                                IconButton(onClick = { summaryOpen = false }) {
+                                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, "カレンダーに戻る")
+                                }
+                            } else {
+                                IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                    Icon(Icons.Outlined.Menu, "メニューを開く")
+                                }
                             }
                         },
                         actions = {

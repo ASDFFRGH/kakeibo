@@ -49,9 +49,13 @@ object SummaryCalculator {
         period: SummaryPeriod,
         anchorDate: LocalDate,
         expenses: List<ExpenseEntity>,
+        categoryUuids: List<String> = emptyList(),
     ): SummaryResult {
         val (from, to) = bounds(period, anchorDate)
-        val categories = linkedMapOf<String, CategorySummary>()
+        val categories =
+            categoryUuids
+                .distinct()
+                .associateWithTo(linkedMapOf()) { CategorySummary(categoryUuid = it) }
         var totalExpense = 0L
         var totalIncome = 0L
         var expenseCount = 0

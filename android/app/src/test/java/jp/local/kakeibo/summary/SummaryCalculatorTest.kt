@@ -63,6 +63,22 @@ class SummaryCalculatorTest {
         assertEquals(4000, result.categories.single().balance)
     }
 
+    @Test
+    fun `summary includes requested categories with zero amounts`() {
+        val result =
+            SummaryCalculator.calculate(
+                period = SummaryPeriod.MONTH,
+                anchorDate = LocalDate.parse("2026-07-14"),
+                expenses = listOf(expense("2026-07-14", 1000, categoryUuid = "food")),
+                categoryUuids = listOf("food", "daily", "food"),
+            )
+
+        assertEquals(listOf("food", "daily"), result.categories.map { it.categoryUuid })
+        assertEquals(1000, result.categories.first { it.categoryUuid == "food" }.expenseAmount)
+        assertEquals(0, result.categories.first { it.categoryUuid == "daily" }.expenseAmount)
+        assertEquals(0, result.categories.first { it.categoryUuid == "daily" }.expenseCount)
+    }
+
     private fun expense(
         date: String,
         amount: Long,

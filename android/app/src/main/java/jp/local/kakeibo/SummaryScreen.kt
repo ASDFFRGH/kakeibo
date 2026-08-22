@@ -113,8 +113,13 @@ private fun SummaryPeriodPager(
     ) { page ->
         val anchorDate = period.shift(baseDate, (page - REPORT_PAGER_INITIAL_PAGE).toLong())
         val summary =
-            remember(period, anchorDate, expenses) {
-                SummaryCalculator.calculate(period, anchorDate, expenses)
+            remember(period, anchorDate, expenses, categories) {
+                SummaryCalculator.calculate(
+                    period = period,
+                    anchorDate = anchorDate,
+                    expenses = expenses,
+                    categoryUuids = categories.map { it.uuid },
+                )
             }
         val breakdown =
             remember(summary, categories, transactionType) {
@@ -448,7 +453,12 @@ private fun BreakdownRow(
             )
         }
         Text(
-            text = "${if (item.transactionType == TransactionType.EXPENSE) "-" else "+"}${formatCurrency(item.amount)}",
+            text =
+                when {
+                    item.amount == 0L -> formatCurrency(item.amount)
+                    item.transactionType == TransactionType.EXPENSE -> "-${formatCurrency(item.amount)}"
+                    else -> "+${formatCurrency(item.amount)}"
+                },
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -465,9 +475,10 @@ private fun CategorySummary.toBreakdownItem(
     transactionType: String,
 ): BreakdownItem? {
     val amount = if (transactionType == TransactionType.INCOME) incomeAmount else expenseAmount
-    if (amount <= 0) return null
     val count = if (transactionType == TransactionType.INCOME) incomeCount else expenseCount
     val category = categories.find { it.uuid == categoryUuid }
+    if (category?.type != null && category.type != transactionType) return null
+    if (category == null && amount <= 0) return null
     return BreakdownItem(
         categoryUuid = categoryUuid,
         name = category?.name ?: "不明なカテゴリ",
