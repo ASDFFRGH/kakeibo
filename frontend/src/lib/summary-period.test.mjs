@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { shiftAnchor } from "./summary-period.mjs";
+import { resolveMonth, shiftAnchor } from "./summary-period.mjs";
+
+test("month query accepts a valid year and month", () => {
+  assert.equal(resolveMonth("2025-12", "2026-08-30"), "2025-12");
+});
+
+test("month query falls back when it is absent or invalid", () => {
+  assert.equal(resolveMonth(null, "2026-08-30"), "2026-08");
+  assert.equal(resolveMonth("2026-13", "2026-08-30"), "2026-08");
+  assert.equal(resolveMonth("2026-8", "2026-08-30"), "2026-08");
+});
 
 test("day navigation crosses month boundaries", () => {
   assert.equal(shiftAnchor("2026-07-31", "day", 1), "2026-08-01");

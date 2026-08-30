@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import {
   CalendarDays,
   ChevronLeft,
@@ -11,7 +12,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { api, Summary, SummaryPeriod } from "../../lib/api";
-import { shiftAnchor } from "../../lib/summary-period.mjs";
+import { resolveMonth, shiftAnchor } from "../../lib/summary-period.mjs";
 
 const periods: { value: SummaryPeriod; label: string }[] = [
   { value: "day", label: "日別" },
@@ -25,9 +26,20 @@ const money = new Intl.NumberFormat("ja-JP", {
   currency: "JPY",
 });
 
-export default function SummaryPage() {
+export default function SummaryRoute() {
+  return (
+    <Suspense fallback={<main />}>
+      <SummaryPage />
+    </Suspense>
+  );
+}
+
+function SummaryPage() {
+  const searchParams = useSearchParams();
   const [period, setPeriod] = useState<SummaryPeriod>("month");
-  const [anchor, setAnchor] = useState(today());
+  const [anchor, setAnchor] = useState(
+    () => `${resolveMonth(searchParams.get("month"), today())}-01`,
+  );
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -55,7 +67,7 @@ export default function SummaryPage() {
           <WalletCards />
           <span>My 家計簿</span>
         </div>
-        <Link className="secondary" href="/">
+        <Link className="secondary" href={`/?month=${anchor.slice(0, 7)}`}>
           <List size={18} />
           カレンダー
         </Link>

@@ -273,6 +273,7 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
     var initialExpenseDate by remember { mutableStateOf(LocalDate.now()) }
     var selectedMonthText by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     var selectedDateText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
+    var reportAnchorDateText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     var expenseListScrolling by remember { mutableStateOf(false) }
     val selectedMonth = YearMonth.parse(selectedMonthText)
     val selectedDate = LocalDate.parse(selectedDateText)
@@ -280,6 +281,13 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
     val drawerState = androidx.compose.material3.rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val view = LocalView.current
+    val closeSummary = {
+        val reportDate = LocalDate.parse(reportAnchorDateText)
+        val reportMonth = YearMonth.from(reportDate)
+        selectedMonthText = reportMonth.toString()
+        selectedDateText = reportMonth.coerceDay(reportDate.dayOfMonth).toString()
+        summaryOpen = false
+    }
 
     LaunchedEffect(summaryOpen, view) {
         val window = (view.context as? Activity)?.window ?: return@LaunchedEffect
@@ -295,9 +303,7 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
         }
     }
 
-    BackHandler(enabled = summaryOpen) {
-        summaryOpen = false
-    }
+    BackHandler(enabled = summaryOpen, onBack = closeSummary)
 
     if (expenseEditorOpen || editingExpense != null) {
         val closeEditor = {
@@ -417,7 +423,7 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                         },
                         navigationIcon = {
                             if (summaryOpen) {
-                                IconButton(onClick = { summaryOpen = false }) {
+                                IconButton(onClick = closeSummary) {
                                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, "カレンダーに戻る")
                                 }
                             } else {
@@ -430,6 +436,7 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                             if (!summaryOpen && !graphOpen && !trashOpen) {
                                 IconButton(
                                     onClick = {
+                                        reportAnchorDateText = selectedDate.toString()
                                         summaryOpen = true
                                         graphOpen = false
                                         trashOpen = false
@@ -502,6 +509,8 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
                 SummaryScreen(
                     expenses = state.expenses,
                     categories = state.categories,
+                    initialAnchorDate = LocalDate.parse(reportAnchorDateText),
+                    onAnchorDateChange = { reportAnchorDateText = it.toString() },
                     modifier = Modifier.padding(padding),
                 )
             } else if (graphOpen) {

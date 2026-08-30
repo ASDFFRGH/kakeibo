@@ -1,5 +1,12 @@
 "use client";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   BarChart3,
   CalendarDays,
@@ -18,22 +25,37 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { api, Category, Expense } from "../lib/api";
 import { localToday, monthEnd } from "../lib/calendar-date.mjs";
 import { orderCategoriesByExpenseFrequency } from "../lib/category-order.mjs";
+import { resolveMonth } from "../lib/summary-period.mjs";
 
 const money = new Intl.NumberFormat("ja-JP", {
   style: "currency",
   currency: "JPY",
   maximumFractionDigits: 0,
 });
-export default function Home() {
+export default function HomePage() {
+  return (
+    <Suspense fallback={<main className="calendar-page" />}>
+      <Home />
+    </Suspense>
+  );
+}
+
+function Home() {
+  const searchParams = useSearchParams();
   const [categories, setCategories] = useState<Category[]>([]),
     [expenses, setExpenses] = useState<Expense[]>([]),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
-  const [month, setMonth] = useState(localToday().slice(0, 7)),
-    [selectedDate, setSelectedDate] = useState(localToday()),
+  const [month, setMonth] = useState(() =>
+      resolveMonth(searchParams.get("month"), localToday()),
+    ),
+    [selectedDate, setSelectedDate] = useState(() =>
+      searchParams.has("month") ? `${month}-01` : localToday(),
+    ),
     [navOpen, setNavOpen] = useState(false),
     [dialog, setDialog] = useState<"expense" | "category" | "trash" | null>(
       null,
@@ -128,7 +150,7 @@ export default function Home() {
             <CalendarDays size={17} />
             カレンダー
           </Link>
-          <Link href="/summary">
+          <Link href={`/summary?month=${month}`}>
             <BarChart3 size={17} />
             サマリー
           </Link>
@@ -177,7 +199,7 @@ export default function Home() {
               <CalendarDays />
               カレンダー
             </button>
-            <Link href="/summary">
+            <Link href={`/summary?month=${month}`}>
               <BarChart3 />
               サマリー
             </Link>

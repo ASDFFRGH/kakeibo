@@ -5,6 +5,11 @@ const parseDate = (value) => {
 
 const formatDate = (value) => value.toISOString().slice(0, 10);
 
+export const resolveMonth = (value, fallbackDate) =>
+  /^\d{4}-(0[1-9]|1[0-2])$/.test(value ?? "")
+    ? value
+    : fallbackDate.slice(0, 7);
+
 export const shiftAnchor = (anchor, period, amount) => {
   const date = parseDate(anchor);
   if (period === "day") date.setUTCDate(date.getUTCDate() + amount);

@@ -29,11 +29,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +58,7 @@ import jp.local.kakeibo.summary.SummaryPeriod
 import jp.local.kakeibo.summary.SummaryResult
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 private const val REPORT_PAGER_PAGE_COUNT = 2_401
@@ -65,6 +68,8 @@ private const val REPORT_PAGER_INITIAL_PAGE = REPORT_PAGER_PAGE_COUNT / 2
 fun SummaryScreen(
     expenses: List<ExpenseEntity>,
     categories: List<CategoryEntity>,
+    initialAnchorDate: LocalDate,
+    onAnchorDateChange: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var period by remember { mutableStateOf(SummaryPeriod.MONTH) }
@@ -84,6 +89,8 @@ fun SummaryScreen(
                 transactionType = transactionType,
                 expenses = expenses,
                 categories = categories,
+                initialAnchorDate = initialAnchorDate,
+                onAnchorDateChange = onAnchorDateChange,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -96,15 +103,27 @@ private fun SummaryPeriodPager(
     transactionType: String,
     expenses: List<ExpenseEntity>,
     categories: List<CategoryEntity>,
+    initialAnchorDate: LocalDate,
+    onAnchorDateChange: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val baseDate = remember { LocalDate.now() }
+    val baseDate = remember { initialAnchorDate }
     val pagerState =
         rememberPagerState(
             initialPage = REPORT_PAGER_INITIAL_PAGE,
             pageCount = { REPORT_PAGER_PAGE_COUNT },
         )
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(pagerState, period, baseDate) {
+        snapshotFlow { pagerState.settledPage }
+            .distinctUntilChanged()
+            .collect { page ->
+                onAnchorDateChange(
+                    period.shift(baseDate, (page - REPORT_PAGER_INITIAL_PAGE).toLong()),
+                )
+            }
+    }
 
     HorizontalPager(
         state = pagerState,
