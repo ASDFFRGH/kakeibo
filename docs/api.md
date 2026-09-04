@@ -391,6 +391,95 @@ GET /summaries?period=month&date=2026-07-14
 
 ---
 
+# Gambling API
+
+ギャンブル収支は家計簿の支出・収入とは別の台帳として扱う。家計簿の一覧、サマリー、グラフには含めない。収支額は保存せず、`payout_amount - stake_amount`で算出する。
+
+## GamblingRecordオブジェクト
+
+```json
+{
+  "uuid": "40000000-0000-4000-8000-000000000001",
+  "date": "2026-09-04",
+  "stake_amount": 5000,
+  "payout_amount": 8200,
+  "game_type": "競馬",
+  "memo": "東京11R",
+  "created_at": "2026-09-04T06:00:00Z",
+  "updated_at": "2026-09-04T06:00:00Z",
+  "deleted_at": null
+}
+```
+
+`stake_amount`と`payout_amount`は0以上の整数で、少なくとも一方を1以上とする。`game_type`は空白だけの値を許可せず、保存前に前後の空白を除去する。
+
+## 一覧・取得・登録・更新・削除
+
+```text
+GET    /gambling/records?from=2026-09-01&to=2026-09-30&game_type=競馬
+GET    /gambling/records/{uuid}
+POST   /gambling/records
+PUT    /gambling/records/{uuid}
+DELETE /gambling/records/{uuid}
+```
+
+一覧の`from`と`to`は`YYYY-MM-DD`形式、`game_type`は完全一致の任意条件とする。登録時はGamblingRecordオブジェクト、更新時は`date`、`stake_amount`、`payout_amount`、`game_type`、`memo`を送信する。削除は論理削除で、成功時は`204 No Content`を返す。
+
+## ゴミ箱と復元
+
+```text
+GET  /gambling/trash
+POST /gambling/records/{uuid}/restore
+```
+
+ゴミ箱は削除済みのギャンブル収支だけを削除日時の降順で返す。復元時は`deleted_at`をNULLへ戻して`updated_at`を更新し、成功時は`204 No Content`を返す。
+
+## ギャンブル収支同期
+
+家計簿の`/sync`とは独立したカーソルを使用する。
+
+```text
+POST /gambling/sync
+```
+
+### Request
+
+```json
+{
+  "last_synced_at": "2026-09-04T05:00:00Z",
+  "records": [
+    {
+      "uuid": "40000000-0000-4000-8000-000000000001",
+      "date": "2026-09-04",
+      "stake_amount": 5000,
+      "payout_amount": 8200,
+      "game_type": "競馬",
+      "memo": "東京11R",
+      "created_at": "2026-09-04T06:00:00Z",
+      "updated_at": "2026-09-04T06:00:00Z",
+      "deleted_at": null
+    }
+  ]
+}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "server_time": "2026-09-04T06:01:00Z",
+  "synced": ["40000000-0000-4000-8000-000000000001"],
+  "data": {
+    "records": []
+  }
+}
+```
+
+アップロード全体は1トランザクションで保存する。競合時は`updated_at`が新しいレコードを優先し、同時刻ならサーバー側を優先する。レスポンスには前回カーソル以降の変更に加え、アップロードしたUUIDのサーバー側確定値を含める。
+
+---
+
 # 同期API
 
 Androidから未同期データをまとめて送信し、サーバー側の更新データを取得する。

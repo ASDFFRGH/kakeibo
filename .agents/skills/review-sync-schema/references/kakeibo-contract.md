@@ -5,7 +5,8 @@ Use this file as project-specific review guidance, then derive the current contr
 ## Source map
 
 - Android entities, Room schema, and migrations: `android/app/src/main/java/jp/local/kakeibo/data/Models.kt`
-- Android sync request, response, and merge: `android/app/src/main/java/jp/local/kakeibo/data/KakeiboRepository.kt`
+- Android household sync request, response, and merge: `android/app/src/main/java/jp/local/kakeibo/data/KakeiboRepository.kt`
+- Android gambling sync request, response, and merge: `android/app/src/main/java/jp/local/kakeibo/data/GamblingRepository.kt`
 - Android base URL: `android/app/build.gradle.kts`
 - Go wire models: `backend/internal/model/model.go`
 - Strict decoding and validation: `backend/internal/api/api.go`
@@ -41,6 +42,21 @@ Use this file as project-specific review guidance, then derive the current contr
 | Created/updated/deleted | snake-case wire names | matching timestamp columns | Same semantics as category |
 | Pending sync | `is_synced` | none | Android-local only; never expose |
 
+### Gambling record
+
+| Meaning | Android/JSON | PostgreSQL | Notes |
+|---|---|---|---|
+| ID | `uuid` | `uuid` | UUID string on wire |
+| Date | `date` | `gambling_date` | `YYYY-MM-DD` |
+| Stake | `stake_amount` | `stake_amount` | Non-negative integer; stake or payout must be positive |
+| Payout | `payout_amount` | `payout_amount` | Non-negative integer; stake or payout must be positive |
+| Game type | `game_type` | `game_type` | Non-blank string, trimmed before persistence |
+| Memo | `memo` | `memo` | String |
+| Created/updated/deleted | snake-case wire names | matching timestamp columns | Same semantics as category and expense |
+| Pending sync | `is_synced` | none | Android-local only; never expose |
+
+At least one of `stake_amount` and `payout_amount` must be positive. Balance is derived as `payout_amount - stake_amount` and is never persisted.
+
 ### Sync envelope
 
 - Request: `last_synced_at`, `categories`, `expenses`.
@@ -48,6 +64,15 @@ Use this file as project-specific review guidance, then derive the current contr
 - Android sends only rows with `is_synced = false`.
 - Server returns changes since the last successful server timestamp.
 - Newer `updated_at` wins; review the equal-timestamp rule explicitly.
+
+### Gambling sync envelope
+
+- Endpoint: `/api/v1/gambling/sync`; it is independent from the household `/sync` endpoint and cursor.
+- Request: `last_synced_at`, `records`.
+- Response: `success`, `server_time`, `synced`, `data.records`.
+- Android sends only gambling rows with `is_synced = false` and stores the cursor in separate preferences.
+- Server returns canonical winners for uploaded UUIDs as well as changes since the last successful gambling cursor.
+- The existing household `/sync` request and response remain unchanged for old-client compatibility.
 
 ## Known failure pattern
 

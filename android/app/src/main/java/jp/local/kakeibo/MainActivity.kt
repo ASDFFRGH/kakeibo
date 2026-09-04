@@ -88,6 +88,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -129,6 +130,7 @@ import jp.local.kakeibo.expense.calendarDates
 import jp.local.kakeibo.expense.coerceDay
 import jp.local.kakeibo.expense.dailyTotals
 import jp.local.kakeibo.expense.monthlyExpenses
+import jp.local.kakeibo.navigation.KakeiboApp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -156,7 +158,9 @@ data class UiState(
 class MainViewModel(
     app: Application,
 ) : AndroidViewModel(app) {
-    private val repository = (app as KakeiboApplication).repository
+    private val kakeiboApp = app as KakeiboApplication
+    private val repository = kakeiboApp.repository
+    private val gamblingRepository = kakeiboApp.gamblingRepository
     private val syncStatus = MutableStateFlow(false to null as String?)
 
     val state =
@@ -210,6 +214,7 @@ class MainViewModel(
             syncStatus.value =
                 try {
                     repository.sync()
+                    gamblingRepository.sync()
                     false to "同期しました"
                 } catch (error: Exception) {
                     if (error is CancellationException) throw error
@@ -228,7 +233,7 @@ class MainActivity : ComponentActivity() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
-        setContent { KakeiboTheme { KakeiboScreen() } }
+        setContent { KakeiboTheme { KakeiboApp() } }
     }
 }
 
@@ -262,7 +267,10 @@ fun KakeiboTheme(content: @Composable () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
+fun KakeiboScreen(
+    viewModel: MainViewModel = viewModel(),
+    onFullscreenChange: (Boolean) -> Unit = {},
+) {
     val state by viewModel.state.collectAsState()
     var editingExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
     var expenseEditorOpen by remember { mutableStateOf(false) }
@@ -287,6 +295,12 @@ fun KakeiboScreen(viewModel: MainViewModel = viewModel()) {
         selectedMonthText = reportMonth.toString()
         selectedDateText = reportMonth.coerceDay(reportDate.dayOfMonth).toString()
         summaryOpen = false
+    }
+
+    val fullscreen = expenseEditorOpen || editingExpense != null || categoryEditorOpen
+    LaunchedEffect(fullscreen) { onFullscreenChange(fullscreen) }
+    DisposableEffect(Unit) {
+        onDispose { onFullscreenChange(false) }
     }
 
     LaunchedEffect(summaryOpen, view) {

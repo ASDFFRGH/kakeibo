@@ -1,8 +1,8 @@
 # 家計簿アプリ アーキテクチャ設計書
 
-- Version: 1.1.0
+- Version: 1.2.0
 - Status: Draft
-- Last Updated: 2026-07-14
+- Last Updated: 2026-09-04
 
 ---
 
@@ -74,6 +74,7 @@ Androidアプリを中心とし、サーバーは同期およびPCからの管�
 役割
 
 - 家計簿入力
+- ギャンブル収支入力
 - ローカル保存
 - オフライン利用
 - 同期
@@ -387,6 +388,40 @@ DBスキーマ、Roomスキーマ、同期ペイロードは変更しない。
 
 ---
 
+## ギャンブル収支
+
+ギャンブル収支は家計簿の`expenses`を再利用せず、Android RoomとPostgreSQLの`gambling_records`へ保存する。これにより既存の家計簿一覧・カテゴリ・サマリー・グラフから構造的に分離する。
+
+```
+Android GamblingScreen
+
+↓
+
+GamblingViewModel
+
+↓
+
+GamblingRepository
+
+↓
+
+Room gambling_records
+
+↓ 手動同期
+
+POST /api/v1/gambling/sync
+
+↓
+
+PostgreSQL gambling_records
+```
+
+Webは`/api/v1/gambling/records`配下のREST APIを使用する。投資合計、回収合計、収支は記録から都度計算し、集計専用テーブルを持たない。
+
+Androidの最上位ナビゲーションは「家計簿」と「ギャンブル」を分ける。家計簿内のカレンダー、グラフ、カテゴリ、ゴミ箱は既存の副ナビゲーションを維持する。
+
+---
+
 # 8. 同期方式
 
 本システムでは双方向同期を採用する。
@@ -394,6 +429,8 @@ DBスキーマ、Roomスキーマ、同期ペイロードは変更しない。
 同期はユーザー操作で開始する。
 
 自動同期は行わない。
+
+家計簿の`POST /api/v1/sync`とギャンブルの`POST /api/v1/gambling/sync`は、互いに独立した差分カーソルを使用する。ギャンブル記録を既存同期ペイロードへ追加せず、旧Androidが未知のデータを無視したまま家計簿カーソルを進めることを防ぐ。
 
 ---
 

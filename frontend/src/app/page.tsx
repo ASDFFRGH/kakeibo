@@ -30,6 +30,7 @@ import { api, Category, Expense } from "../lib/api";
 import { localToday, monthEnd } from "../lib/calendar-date.mjs";
 import { orderCategoriesByExpenseFrequency } from "../lib/category-order.mjs";
 import { resolveMonth } from "../lib/summary-period.mjs";
+import { LedgerNavigation } from "./components/LedgerNavigation";
 
 const money = new Intl.NumberFormat("ja-JP", {
   style: "currency",
@@ -185,6 +186,8 @@ function Home() {
           </button>
         </div>
       </header>
+
+      <LedgerNavigation active="household" month={month} />
 
       {navOpen && (
         <div

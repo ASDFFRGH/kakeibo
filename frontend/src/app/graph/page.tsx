@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, Category, Expense } from "../../lib/api";
 import { localToday } from "../../lib/calendar-date.mjs";
+import { LedgerNavigation } from "../components/LedgerNavigation";
 
 const money = new Intl.NumberFormat("ja-JP", {
   style: "currency",
@@ -90,6 +91,11 @@ export default function GraphPage() {
           カレンダー
         </Link>
       </header>
+
+      <LedgerNavigation
+        active="household"
+        month={`${year}-${String(selectedMonth).padStart(2, "0")}`}
+      />
 
       <section className="graph-heading">
         <div>

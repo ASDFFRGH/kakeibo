@@ -16,10 +16,11 @@ import (
 )
 
 type API struct {
-	repo        *repository.Repository
-	summaryRepo summaryExpenseRepository
-	trashRepo   trashRepository
-	cors        string
+	repo         *repository.Repository
+	summaryRepo  summaryExpenseRepository
+	trashRepo    trashRepository
+	gamblingRepo gamblingRepository
+	cors         string
 }
 
 type summaryExpenseRepository interface {
@@ -33,8 +34,22 @@ type trashRepository interface {
 	RestoreExpense(ctx context.Context, id string) error
 }
 
+type gamblingRepository interface {
+	ListGamblingRecords(ctx context.Context, from, to, gameType string, includeDeleted bool) ([]model.GamblingRecord, error)
+	GetGamblingRecord(ctx context.Context, id string) (model.GamblingRecord, error)
+	SaveGamblingRecord(ctx context.Context, record model.GamblingRecord) (model.GamblingRecord, error)
+	DeleteGamblingRecord(ctx context.Context, id string) error
+	ListDeletedGamblingRecords(ctx context.Context) ([]model.GamblingRecord, error)
+	RestoreGamblingRecord(ctx context.Context, id string) error
+	SyncGamblingRecords(ctx context.Context, records []model.GamblingRecord, since time.Time) (time.Time, []string, model.GamblingSyncData, error)
+}
+
 func New(repo *repository.Repository, cors string) http.Handler {
-	a := &API{repo: repo, summaryRepo: repo, trashRepo: repo, cors: cors}
+	a := &API{repo: repo, summaryRepo: repo, trashRepo: repo, gamblingRepo: repo, cors: cors}
+	return a.middleware(a.routes())
+}
+
+func (a *API) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { ok(w, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/v1/categories", a.listCategories)
@@ -52,7 +67,15 @@ func New(repo *repository.Repository, cors string) http.Handler {
 	mux.HandleFunc("POST /api/v1/expenses/{uuid}/restore", a.restoreExpense)
 	mux.HandleFunc("GET /api/v1/summaries", a.getSummary)
 	mux.HandleFunc("POST /api/v1/sync", a.sync)
-	return a.middleware(mux)
+	mux.HandleFunc("GET /api/v1/gambling/records", a.listGamblingRecords)
+	mux.HandleFunc("POST /api/v1/gambling/records", a.createGamblingRecord)
+	mux.HandleFunc("GET /api/v1/gambling/records/{uuid}", a.getGamblingRecord)
+	mux.HandleFunc("PUT /api/v1/gambling/records/{uuid}", a.updateGamblingRecord)
+	mux.HandleFunc("DELETE /api/v1/gambling/records/{uuid}", a.deleteGamblingRecord)
+	mux.HandleFunc("GET /api/v1/gambling/trash", a.listGamblingTrash)
+	mux.HandleFunc("POST /api/v1/gambling/records/{uuid}/restore", a.restoreGamblingRecord)
+	mux.HandleFunc("POST /api/v1/gambling/sync", a.syncGamblingRecords)
+	return mux
 }
 func (a *API) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -87,6 +110,20 @@ func decode(r *http.Request, v any) error {
 	return d.Decode(v)
 }
 func validUUID(s string) bool { return len(s) == 36 && strings.Count(s, "-") == 4 }
+func validGamblingUUID(s string) bool {
+	if len(s) != 36 || s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
+		return false
+	}
+	for i := range s {
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			continue
+		}
+		if !strings.ContainsRune("0123456789abcdefABCDEF", rune(s[i])) {
+			return false
+		}
+	}
+	return true
+}
 func validCategory(x model.Category) error {
 	if !validUUID(x.UUID) || strings.TrimSpace(x.Name) == "" {
 		return errors.New("uuid and name are required")
@@ -107,6 +144,33 @@ func validExpense(x model.Expense) error {
 		return errors.New("date must be YYYY-MM-DD")
 	}
 	return nil
+}
+func normalizeGamblingRecord(x model.GamblingRecord) model.GamblingRecord {
+	x.GameType = strings.TrimSpace(x.GameType)
+	return x
+}
+func validGamblingRecord(x model.GamblingRecord) error {
+	if !validGamblingUUID(x.UUID) {
+		return errors.New("valid uuid is required")
+	}
+	parsedDate, err := time.Parse("2006-01-02", x.Date)
+	if err != nil || parsedDate.Format("2006-01-02") != x.Date {
+		return errors.New("date must be YYYY-MM-DD")
+	}
+	if x.StakeAmount < 0 || x.PayoutAmount < 0 || (x.StakeAmount == 0 && x.PayoutAmount == 0) {
+		return errors.New("stake_amount and payout_amount must be non-negative and at least one must be positive")
+	}
+	if strings.TrimSpace(x.GameType) == "" {
+		return errors.New("game_type is required")
+	}
+	return nil
+}
+func validOptionalDate(value string) bool {
+	if value == "" {
+		return true
+	}
+	parsed, err := time.Parse("2006-01-02", value)
+	return err == nil && parsed.Format("2006-01-02") == value
 }
 func (a *API) handleErr(w http.ResponseWriter, err error) {
 	if errors.Is(err, repository.ErrNotFound) {
@@ -324,4 +388,140 @@ func (a *API) sync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, 200, map[string]any{"success": true, "server_time": time.Now().UTC(), "synced": synced, "data": data})
+}
+
+func (a *API) listGamblingRecords(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	from, to := query.Get("from"), query.Get("to")
+	if !validOptionalDate(from) || !validOptionalDate(to) {
+		fail(w, http.StatusBadRequest, "from and to must be YYYY-MM-DD")
+		return
+	}
+	records, err := a.gamblingRepo.ListGamblingRecords(
+		r.Context(), from, to, strings.TrimSpace(query.Get("game_type")), false,
+	)
+	if err != nil {
+		a.handleErr(w, err)
+		return
+	}
+	ok(w, records)
+}
+
+func (a *API) getGamblingRecord(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("uuid")
+	if !validGamblingUUID(id) {
+		fail(w, http.StatusBadRequest, "invalid gambling record uuid")
+		return
+	}
+	record, err := a.gamblingRepo.GetGamblingRecord(r.Context(), id)
+	if err != nil {
+		a.handleErr(w, err)
+		return
+	}
+	ok(w, record)
+}
+
+func (a *API) createGamblingRecord(w http.ResponseWriter, r *http.Request) {
+	var record model.GamblingRecord
+	if decode(r, &record) != nil {
+		fail(w, http.StatusBadRequest, "invalid gambling record")
+		return
+	}
+	record = normalizeGamblingRecord(record)
+	if validGamblingRecord(record) != nil {
+		fail(w, http.StatusBadRequest, "invalid gambling record")
+		return
+	}
+	saved, err := a.gamblingRepo.SaveGamblingRecord(r.Context(), record)
+	if err != nil {
+		a.handleErr(w, err)
+		return
+	}
+	write(w, http.StatusCreated, map[string]any{"success": true, "data": saved})
+}
+
+func (a *API) updateGamblingRecord(w http.ResponseWriter, r *http.Request) {
+	var record model.GamblingRecord
+	if decode(r, &record) != nil {
+		fail(w, http.StatusBadRequest, "invalid gambling record")
+		return
+	}
+	record.UUID = r.PathValue("uuid")
+	record = normalizeGamblingRecord(record)
+	if validGamblingRecord(record) != nil {
+		fail(w, http.StatusBadRequest, "invalid gambling record")
+		return
+	}
+	record.UpdatedAt = time.Now().UTC()
+	saved, err := a.gamblingRepo.SaveGamblingRecord(r.Context(), record)
+	if err != nil {
+		a.handleErr(w, err)
+		return
+	}
+	ok(w, saved)
+}
+
+func (a *API) deleteGamblingRecord(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("uuid")
+	if !validGamblingUUID(id) {
+		fail(w, http.StatusBadRequest, "invalid gambling record uuid")
+		return
+	}
+	if err := a.gamblingRepo.DeleteGamblingRecord(r.Context(), id); err != nil {
+		a.handleErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) listGamblingTrash(w http.ResponseWriter, r *http.Request) {
+	records, err := a.gamblingRepo.ListDeletedGamblingRecords(r.Context())
+	if err != nil {
+		a.handleErr(w, err)
+		return
+	}
+	ok(w, records)
+}
+
+func (a *API) restoreGamblingRecord(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("uuid")
+	if !validGamblingUUID(id) {
+		fail(w, http.StatusBadRequest, "invalid gambling record uuid")
+		return
+	}
+	if err := a.gamblingRepo.RestoreGamblingRecord(r.Context(), id); err != nil {
+		a.handleErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) syncGamblingRecords(w http.ResponseWriter, r *http.Request) {
+	var request model.GamblingSyncRequest
+	if decode(r, &request) != nil {
+		fail(w, http.StatusBadRequest, "invalid gambling sync request")
+		return
+	}
+	for i := range request.Records {
+		request.Records[i] = normalizeGamblingRecord(request.Records[i])
+		if validGamblingRecord(request.Records[i]) != nil {
+			fail(w, http.StatusBadRequest, "invalid gambling record in sync")
+			return
+		}
+	}
+	since := time.Unix(0, 0).UTC()
+	if request.LastSyncedAt != nil {
+		since = request.LastSyncedAt.UTC()
+	}
+	serverTime, synced, data, err := a.gamblingRepo.SyncGamblingRecords(r.Context(), request.Records, since)
+	if err != nil {
+		a.handleErr(w, err)
+		return
+	}
+	write(w, http.StatusOK, map[string]any{
+		"success":     true,
+		"server_time": serverTime,
+		"synced":      synced,
+		"data":        data,
+	})
 }

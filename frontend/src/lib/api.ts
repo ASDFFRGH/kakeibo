@@ -17,6 +17,17 @@ export type Expense = {
   updated_at: string;
   deleted_at: string | null;
 };
+export type GamblingRecord = {
+  uuid: string;
+  date: string;
+  stake_amount: number;
+  payout_amount: number;
+  game_type: string;
+  memo: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
 export type TrashData = {
   categories: Category[];
   expenses: Expense[];
@@ -114,4 +125,35 @@ export const api = {
     request<Summary>(
       `/summaries?period=${encodeURIComponent(period)}&date=${encodeURIComponent(date)}`,
     ),
+  gamblingRecords: (query = "") =>
+    request<GamblingRecord[]>(`/gambling/records${query}`),
+  saveGamblingRecord: (
+    record: Pick<
+      GamblingRecord,
+      "uuid" | "date" | "stake_amount" | "payout_amount" | "game_type" | "memo"
+    >,
+    editing: boolean,
+  ) =>
+    request<GamblingRecord>(
+      editing ? `/gambling/records/${record.uuid}` : "/gambling/records",
+      {
+        method: editing ? "PUT" : "POST",
+        body: JSON.stringify(
+          editing
+            ? {
+                date: record.date,
+                stake_amount: record.stake_amount,
+                payout_amount: record.payout_amount,
+                game_type: record.game_type,
+                memo: record.memo,
+              }
+            : record,
+        ),
+      },
+    ),
+  deleteGamblingRecord: (id: string) =>
+    request<void>(`/gambling/records/${id}`, { method: "DELETE" }),
+  gamblingTrash: () => request<GamblingRecord[]>("/gambling/trash"),
+  restoreGamblingRecord: (id: string) =>
+    request<void>(`/gambling/records/${id}/restore`, { method: "POST" }),
 };

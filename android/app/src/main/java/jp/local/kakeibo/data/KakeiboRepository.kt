@@ -145,23 +145,49 @@ class KakeiboRepository(
         private const val SYNC_PREFERENCES = "sync"
         private const val LAST_SYNCED_AT = "last"
 
-        fun create(context: Context): KakeiboRepository {
-            val database =
-                Room
-                    .databaseBuilder(context, AppDatabase::class.java, "kakeibo.db")
-                    .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
-                    .addCallback(InitialCategoryCallback())
-                    .build()
-            val gson = GsonBuilder().excludeFieldsWithoutExposeAnnotation().create()
-            val api =
-                Retrofit
-                    .Builder()
-                    .baseUrl(BuildConfig.API_BASE_URL)
-                    .addConverterFactory(GsonConverterFactory.create(gson))
-                    .build()
-                    .create(KakeiboApi::class.java)
-            return KakeiboRepository(database, api, context)
-        }
+        fun create(context: Context): KakeiboRepository = KakeiboDataContainer(context).repository
+    }
+}
+
+internal class KakeiboDataContainer(
+    context: Context,
+) {
+    private val applicationContext = context.applicationContext
+
+    private val database: AppDatabase by lazy {
+        Room
+            .databaseBuilder(applicationContext, AppDatabase::class.java, "kakeibo.db")
+            .addMigrations(
+                AppDatabase.MIGRATION_1_2,
+                AppDatabase.MIGRATION_2_3,
+                AppDatabase.MIGRATION_3_4,
+            ).addCallback(InitialCategoryCallback())
+            .build()
+    }
+
+    private val retrofit: Retrofit by lazy {
+        val gson = GsonBuilder().excludeFieldsWithoutExposeAnnotation().create()
+        Retrofit
+            .Builder()
+            .baseUrl(BuildConfig.API_BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+    }
+
+    val repository: KakeiboRepository by lazy {
+        KakeiboRepository(
+            database = database,
+            api = retrofit.create(KakeiboApi::class.java),
+            context = applicationContext,
+        )
+    }
+
+    val gamblingRepository: GamblingRepository by lazy {
+        GamblingRepository(
+            database = database,
+            api = retrofit.create(GamblingApi::class.java),
+            context = applicationContext,
+        )
     }
 }
 

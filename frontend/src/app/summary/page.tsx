@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { api, Summary, SummaryPeriod } from "../../lib/api";
 import { resolveMonth, shiftAnchor } from "../../lib/summary-period.mjs";
+import { LedgerNavigation } from "../components/LedgerNavigation";
 
 const periods: { value: SummaryPeriod; label: string }[] = [
   { value: "day", label: "日別" },
@@ -72,6 +73,8 @@ function SummaryPage() {
           カレンダー
         </Link>
       </header>
+
+      <LedgerNavigation active="household" month={anchor.slice(0, 7)} />
 
       <section className="summary-heading">
         <div>

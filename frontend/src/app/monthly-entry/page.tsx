@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { api, Category, Expense } from "../../lib/api";
 import { orderCategoriesByAmount } from "../../lib/category-order.mjs";
+import { LedgerNavigation } from "../components/LedgerNavigation";
 
 type TransactionType = Expense["type"];
 type Amounts = Record<string, string>;
@@ -197,6 +198,8 @@ export default function MonthlyEntryPage() {
           カレンダー
         </Link>
       </header>
+
+      <LedgerNavigation active="household" month={month} />
 
       <section className="batch-heading">
         <div>
