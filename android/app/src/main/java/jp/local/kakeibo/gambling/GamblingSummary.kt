@@ -1,11 +1,25 @@
 package jp.local.kakeibo.gambling
 
 import jp.local.kakeibo.data.GamblingRecordEntity
+import java.time.LocalDate
+import java.time.YearMonth
 
 data class GamblingTotals(
     val totalStake: Long,
     val totalPayout: Long,
     val balance: Long,
+)
+
+data class GamblingGameTypeSummary(
+    val gameType: String,
+    val totals: GamblingTotals,
+    val count: Int,
+)
+
+data class GamblingMonthSummary(
+    val month: YearMonth,
+    val totals: GamblingTotals,
+    val count: Int,
 )
 
 enum class GamblingInputError(
@@ -54,3 +68,30 @@ fun calculateGamblingTotals(records: Iterable<GamblingRecordEntity>): GamblingTo
         balance = totalPayout - totalStake,
     )
 }
+
+/** Active records for [month], grouped by game type in a stable, useful order. */
+fun calculateGamblingGameTypeSummaries(
+    records: Iterable<GamblingRecordEntity>,
+    month: YearMonth,
+): List<GamblingGameTypeSummary> =
+    records
+        .filter { record -> record.deletedAt == null && record.yearMonthOrNull() == month }
+        .groupBy { it.gameType.trim().ifBlank { "未分類" } }
+        .map { (gameType, gameRecords) ->
+            GamblingGameTypeSummary(gameType, calculateGamblingTotals(gameRecords), gameRecords.size)
+        }
+        .sortedWith(compareByDescending<GamblingGameTypeSummary> { it.totals.totalStake }.thenBy { it.gameType })
+
+/** Active records grouped by month, newest month first. Invalid legacy dates are skipped. */
+fun calculateGamblingMonthSummaries(records: Iterable<GamblingRecordEntity>): List<GamblingMonthSummary> =
+    records
+        .filter { it.deletedAt == null }
+        .mapNotNull { record -> record.yearMonthOrNull()?.let { it to record } }
+        .groupBy({ it.first }, { it.second })
+        .map { (month, monthRecords) ->
+            GamblingMonthSummary(month, calculateGamblingTotals(monthRecords), monthRecords.size)
+        }
+        .sortedByDescending { it.month }
+
+private fun GamblingRecordEntity.yearMonthOrNull(): YearMonth? =
+    runCatching { YearMonth.from(LocalDate.parse(date)) }.getOrNull()

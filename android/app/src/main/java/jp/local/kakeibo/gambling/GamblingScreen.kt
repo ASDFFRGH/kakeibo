@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Casino
 import androidx.compose.material.icons.outlined.Check
@@ -56,6 +57,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -80,7 +83,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
-private val gameTypeSuggestions = listOf("パチンコ", "スロット", "競馬", "競艇", "競輪", "その他")
+private val gameTypeSuggestions = listOf("パチンコ", "スロット", "競馬", "競艇", "競輪", "FX", "株", "その他")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,6 +95,7 @@ fun GamblingRoute(
     var editorOpen by remember { mutableStateOf(false) }
     var editingRecord by remember { mutableStateOf<GamblingRecordEntity?>(null) }
     var trashOpen by rememberSaveable { mutableStateOf(false) }
+    var summaryOpen by rememberSaveable { mutableStateOf(false) }
     var selectedMonthText by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     val selectedMonth = YearMonth.parse(selectedMonthText)
     val snackbar = remember { SnackbarHostState() }
@@ -129,6 +133,17 @@ fun GamblingRoute(
         return
     }
 
+    if (summaryOpen) {
+        BackHandler(onBack = { summaryOpen = false })
+        GamblingSummaryPage(
+            records = state.records,
+            selectedMonth = selectedMonth,
+            onMonthChange = { selectedMonthText = it.toString() },
+            onBack = { summaryOpen = false },
+        )
+        return
+    }
+
     BackHandler(enabled = trashOpen) { trashOpen = false }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -150,6 +165,9 @@ fun GamblingRoute(
                     },
                     actions = {
                         if (!trashOpen) {
+                            IconButton(onClick = { summaryOpen = true }) {
+                                Icon(Icons.Outlined.Assessment, "ギャンブル収支の集計を開く")
+                            }
                             IconButton(onClick = { trashOpen = true }) {
                                 Icon(Icons.Outlined.Delete, "ギャンブルのゴミ箱を開く")
                             }
@@ -270,6 +288,192 @@ private fun GamblingLedger(
                     GamblingRecordCard(record = record, onEdit = { onEdit(record) })
                 }
             }
+        }
+    }
+}
+
+private enum class GamblingSummaryMode(val label: String) {
+    MONTH("月別"),
+    ALL("全体"),
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GamblingSummaryPage(
+    records: List<GamblingRecordEntity>,
+    selectedMonth: YearMonth,
+    onMonthChange: (YearMonth) -> Unit,
+    onBack: () -> Unit,
+) {
+    var modeName by rememberSaveable { mutableStateOf(GamblingSummaryMode.MONTH.name) }
+    val mode = GamblingSummaryMode.valueOf(modeName)
+    val monthGameTypes = remember(records, selectedMonth) {
+        calculateGamblingGameTypeSummaries(records, selectedMonth)
+    }
+    val monthTotals = remember(monthGameTypes) {
+        GamblingTotals(
+            totalStake = monthGameTypes.sumOf { it.totals.totalStake },
+            totalPayout = monthGameTypes.sumOf { it.totals.totalPayout },
+            balance = monthGameTypes.sumOf { it.totals.balance },
+        )
+    }
+    val monthCount = remember(monthGameTypes) { monthGameTypes.sumOf { it.count } }
+    val allTotals = remember(records) { calculateGamblingTotals(records) }
+    val allCount = remember(records) { records.count { it.deletedAt == null } }
+    val months = remember(records) { calculateGamblingMonthSummaries(records) }
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            Column {
+                TopAppBar(
+                    title = { Text("ギャンブル収支の集計", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "収支一覧に戻る")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
+        },
+    ) { padding ->
+        Box(
+            Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().widthIn(max = 760.dp),
+                contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item {
+                    TabRow(selectedTabIndex = mode.ordinal) {
+                        GamblingSummaryMode.entries.forEach { item ->
+                            Tab(
+                                selected = mode == item,
+                                onClick = { modeName = item.name },
+                                text = { Text(item.label) },
+                            )
+                        }
+                    }
+                }
+                if (mode == GamblingSummaryMode.MONTH) {
+                    item { MonthSelector(selectedMonth = selectedMonth, onMonthChange = onMonthChange) }
+                    item {
+                        GamblingSummaryTotalsCard(
+                            title = "${selectedMonth.format(DateTimeFormatter.ofPattern("yyyy年M月"))}の合計",
+                            totals = monthTotals,
+                            count = monthCount,
+                        )
+                    }
+                    item { GamblingBreakdownHeader("種目別") }
+                    if (monthGameTypes.isEmpty()) {
+                        item { GamblingSummaryEmpty("この月の集計対象となる記録はありません") }
+                    } else {
+                        items(monthGameTypes, key = { it.gameType }) { summary ->
+                            GamblingBreakdownCard(
+                                title = summary.gameType,
+                                subtitle = "${summary.count}件",
+                                totals = summary.totals,
+                            )
+                        }
+                    }
+                } else {
+                    item {
+                        GamblingSummaryTotalsCard(
+                            title = "これまでの合計",
+                            totals = allTotals,
+                            count = allCount,
+                        )
+                    }
+                    item { GamblingBreakdownHeader("月別") }
+                    if (months.isEmpty()) {
+                        item { GamblingSummaryEmpty("集計対象となる記録はありません") }
+                    } else {
+                        items(months, key = { it.month.toString() }) { summary ->
+                            GamblingBreakdownCard(
+                                title = summary.month.format(DateTimeFormatter.ofPattern("yyyy年M月")),
+                                subtitle = "${summary.count}件",
+                                totals = summary.totals,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GamblingSummaryTotalsCard(title: String, totals: GamblingTotals, count: Int) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(title, fontWeight = FontWeight.Bold)
+                Text("${count}件", color = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TotalMetric("投資", formatYen(totals.totalStake), MaterialTheme.colorScheme.error, Modifier.weight(1f))
+                TotalMetric("回収", formatYen(totals.totalPayout), MaterialTheme.colorScheme.primary, Modifier.weight(1f))
+                TotalMetric("収支", signedYen(totals.balance), balanceColor(totals.balance), Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun GamblingBreakdownHeader(text: String) {
+    Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+}
+
+@Composable
+private fun GamblingSummaryEmpty(message: String) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            message,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun GamblingBreakdownCard(title: String, subtitle: String, totals: GamblingTotals) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(
+                "投資 ${formatYen(totals.totalStake)}・回収 ${formatYen(totals.totalPayout)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "収支 ${signedYen(totals.balance)}",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = balanceColor(totals.balance),
+            )
         }
     }
 }

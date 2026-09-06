@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Dices,
+  BarChart3,
   Pencil,
   Plus,
   RefreshCw,
@@ -21,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { LedgerNavigation } from "../components/LedgerNavigation";
 import { api, GamblingRecord } from "../../lib/api";
 import { localToday } from "../../lib/calendar-date.mjs";
@@ -45,6 +47,8 @@ const gameTypes = [
   "パチンコ",
   "パチスロ",
   "スポーツベッティング",
+  "FX",
+  "株",
   "その他",
 ];
 
@@ -138,6 +142,13 @@ function GamblingPage() {
           <span>ギャンブル収支</span>
         </div>
         <div className="gambling-header-actions">
+          <Link
+            className="gambling-summary-link"
+            href={`/gambling/summary?scope=month&month=${encodeURIComponent(month)}`}
+          >
+            <BarChart3 size={18} />
+            集計
+          </Link>
           <button
             className="gambling-icon-button"
             type="button"

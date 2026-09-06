@@ -3,6 +3,11 @@ export type GamblingAmounts = {
   payout_amount: number;
 };
 
+export type GamblingRecordForSummary = GamblingAmounts & {
+  date: string;
+  game_type: string;
+};
+
 export type GamblingTotals = {
   stake: number;
   payout: number;
@@ -11,6 +16,16 @@ export type GamblingTotals = {
 };
 
 export function gamblingTotals(records: GamblingAmounts[]): GamblingTotals;
+export function gamblingRecordsForMonth(
+  records: GamblingRecordForSummary[],
+  month: string,
+): GamblingRecordForSummary[];
+export function gamblingTotalsByGameType(
+  records: GamblingRecordForSummary[],
+): Array<GamblingTotals & { game_type: string }>;
+export function gamblingTotalsByMonth(
+  records: GamblingRecordForSummary[],
+): Array<GamblingTotals & { month: string }>;
 export function gamblingMonthRange(month: string): {
   from: string;
   to: string;

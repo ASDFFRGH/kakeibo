@@ -393,7 +393,7 @@ GET /summaries?period=month&date=2026-07-14
 
 # Gambling API
 
-ギャンブル収支は家計簿の支出・収入とは別の台帳として扱う。家計簿の一覧、サマリー、グラフには含めない。収支額は保存せず、`payout_amount - stake_amount`で算出する。
+ギャンブル収支は家計簿の支出・収入とは別の台帳として扱う。家計簿の一覧、サマリー、グラフには含めない。収支額は保存せず、`payout_amount - stake_amount`で算出する。`game_type`は自由入力の文字列であり、API・データベースのenumではない。UIは競馬、FX、株などを入力候補として提示できるが、候補外の値も受け付ける。
 
 ## GamblingRecordオブジェクト
 
@@ -423,7 +423,11 @@ PUT    /gambling/records/{uuid}
 DELETE /gambling/records/{uuid}
 ```
 
-一覧の`from`と`to`は`YYYY-MM-DD`形式、`game_type`は完全一致の任意条件とする。登録時はGamblingRecordオブジェクト、更新時は`date`、`stake_amount`、`payout_amount`、`game_type`、`memo`を送信する。削除は論理削除で、成功時は`204 No Content`を返す。
+一覧の`from`と`to`は`YYYY-MM-DD`形式、`game_type`は完全一致の任意条件とする。登録時はGamblingRecordオブジェクト、更新時は`date`、`stake_amount`、`payout_amount`、`game_type`、`memo`を送信する。削除は論理削除で、成功時は`204 No Content`を返す。サマリー用のAPIはなく、一覧で返された論理削除されていない記録をクライアント側で集計する。
+
+## ギャンブルサマリー（クライアント集計）
+
+月別サマリーは、選択月の投資合計、回収合計、差引、件数と`game_type`別内訳を表示する。全体サマリーは全期間の投資合計、回収合計、差引、件数と月別内訳を表示する。これらは`payout_amount - stake_amount`を含む派生値であり、保存・同期しない。AndroidはRoomの有効な記録から、Webは`GET /gambling/records`で取得した有効な記録から、それぞれローカル／ブラウザ側で算出する。
 
 ## ゴミ箱と復元
 

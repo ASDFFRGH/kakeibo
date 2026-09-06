@@ -1612,6 +1612,25 @@ header > a {
   align-items: center;
   gap: 7px;
 }
+.gambling-summary-link,
+.gambling-back-link {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  text-decoration: none;
+}
+.gambling-summary-link {
+  padding: 0 12px;
+  border-radius: 7px;
+  color: #52615a;
+  font-size: 14px;
+  font-weight: 750;
+}
+.gambling-summary-link:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
 .gambling-icon-button {
   width: 44px;
   height: 44px;
@@ -1657,6 +1676,129 @@ header > a {
   margin: 0;
   color: #617069;
   line-height: 1.55;
+}
+.gambling-summary-heading {
+  padding-bottom: 14px;
+}
+.gambling-summary-scopes {
+  display: inline-grid;
+  grid-template-columns: repeat(2, 1fr);
+  margin: 0 0 18px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #e9efeb;
+}
+.gambling-summary-scopes a {
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0 20px;
+  border-radius: 7px;
+  color: #5d6c64;
+  font-size: 14px;
+  font-weight: 750;
+  text-decoration: none;
+}
+.gambling-summary-scopes a.active {
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: 0 1px 3px rgba(31, 51, 41, 0.14);
+}
+.gambling-summary-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.gambling-summary-error .secondary {
+  flex: 0 0 auto;
+}
+.gambling-summary-state {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text-muted);
+  text-align: center;
+}
+.gambling-summary-state svg {
+  color: #719987;
+}
+.gambling-summary-state strong {
+  color: #35443d;
+  font-size: 18px;
+}
+.gambling-summary-state span {
+  max-width: 440px;
+  line-height: 1.5;
+}
+.gambling-summary-state .primary,
+.gambling-summary-state .secondary {
+  margin-top: 8px;
+  text-decoration: none;
+}
+.gambling-summary-no-records {
+  min-height: 170px;
+}
+.gambling-summary-table {
+  overflow: hidden;
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(31, 51, 41, 0.05);
+}
+.gambling-summary-table .gambling-records-title > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gambling-summary-table .gambling-records-title svg {
+  color: var(--primary);
+}
+.gambling-summary-table-head,
+.gambling-summary-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.5fr) repeat(3, minmax(100px, 1fr)) 70px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px;
+}
+.gambling-summary-table-head {
+  min-height: 42px;
+  border-bottom: 1px solid #dde3e0;
+  background: #f7f9f8;
+  color: #68766f;
+  font-size: 12px;
+  font-weight: 750;
+}
+.gambling-summary-table-head span:not(:first-child) {
+  text-align: right;
+}
+.gambling-summary-row {
+  min-height: 66px;
+  border-bottom: 1px solid #e5eae7;
+  font-variant-numeric: tabular-nums;
+}
+.gambling-summary-row:last-child {
+  border-bottom: 0;
+}
+.gambling-summary-row > *:not(:first-child) {
+  justify-self: end;
+  text-align: right;
+}
+.gambling-summary-row small {
+  display: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
 }
 .gambling-month-navigation {
   min-height: 46px;
@@ -2466,5 +2608,51 @@ select:focus-visible {
     grid-column: 1 / -1;
     grid-row: 2;
     justify-content: space-between;
+  }
+}
+
+@media (max-width: 700px) {
+  .gambling-summary-link {
+    width: 44px;
+    justify-content: center;
+    padding: 0;
+    font-size: 0;
+  }
+  .gambling-summary-link svg {
+    width: 19px;
+    height: 19px;
+  }
+  .gambling-back-link {
+    padding: 0 10px;
+    font-size: 13px;
+  }
+  .gambling-summary-table-head {
+    display: none;
+  }
+  .gambling-summary-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 8px;
+    min-height: 132px;
+    padding: 14px 12px;
+  }
+  .gambling-summary-row > *:first-child {
+    grid-column: 1 / -1;
+    justify-self: start;
+    text-align: left;
+  }
+  .gambling-summary-row > *:not(:first-child) {
+    display: grid;
+    justify-items: start;
+    justify-self: start;
+    text-align: left;
+  }
+  .gambling-summary-row > *:nth-child(4),
+  .gambling-summary-row > *:nth-child(5) {
+    justify-items: end;
+    justify-self: end;
+    text-align: right;
+  }
+  .gambling-summary-row small {
+    display: block;
   }
 }

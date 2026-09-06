@@ -3,6 +3,7 @@ package jp.local.kakeibo.gambling
 import jp.local.kakeibo.data.GamblingRecordEntity
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.time.YearMonth
 
 class GamblingSummaryTest {
     @Test
@@ -29,17 +30,55 @@ class GamblingSummaryTest {
         )
     }
 
+    @Test
+    fun `game type summaries filter to month and group active records`() {
+        val records =
+            listOf(
+                record(uuid = "horse", date = "2026-09-04", stake = 1_000, payout = 1_500, gameType = "競馬"),
+                record(uuid = "slot", date = "2026-09-05", stake = 2_000, payout = 0, gameType = "スロット"),
+                record(uuid = "august", date = "2026-08-31", stake = 10_000, payout = 20_000, gameType = "競馬"),
+                record(uuid = "deleted", date = "2026-09-06", stake = 9_000, payout = 0, gameType = "競馬", deletedAt = "deleted"),
+            )
+
+        val summaries = calculateGamblingGameTypeSummaries(records, YearMonth.of(2026, 9))
+
+        assertEquals(listOf("スロット", "競馬"), summaries.map { it.gameType })
+        assertEquals(2_000, summaries[0].totals.totalStake)
+        assertEquals(-2_000, summaries[0].totals.balance)
+        assertEquals(1_000, summaries[1].totals.totalStake)
+        assertEquals(1_500, summaries[1].totals.totalPayout)
+    }
+
+    @Test
+    fun `month summaries are newest first and exclude deleted and invalid dates`() {
+        val records =
+            listOf(
+                record(uuid = "sep", date = "2026-09-04", stake = 1_000, payout = 1_500),
+                record(uuid = "aug", date = "2026-08-31", stake = 2_000, payout = 0),
+                record(uuid = "invalid", date = "not-a-date", stake = 9_000, payout = 0),
+                record(uuid = "deleted", date = "2026-10-01", stake = 9_000, payout = 0, deletedAt = "deleted"),
+            )
+
+        val summaries = calculateGamblingMonthSummaries(records)
+
+        assertEquals(listOf(YearMonth.of(2026, 9), YearMonth.of(2026, 8)), summaries.map { it.month })
+        assertEquals(1_500, summaries.first().totals.totalPayout)
+        assertEquals(2_000, summaries.last().totals.totalStake)
+    }
+
     private fun record(
         uuid: String,
+        date: String = "2026-09-04",
         stake: Long,
         payout: Long,
+        gameType: String = "競馬",
         deletedAt: String? = null,
     ) = GamblingRecordEntity(
         uuid = uuid,
-        date = "2026-09-04",
+        date = date,
         stakeAmount = stake,
         payoutAmount = payout,
-        gameType = "競馬",
+        gameType = gameType,
         memo = "",
         createdAt = "created",
         updatedAt = "updated",
