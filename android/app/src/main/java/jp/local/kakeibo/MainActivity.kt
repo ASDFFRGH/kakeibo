@@ -131,6 +131,7 @@ import jp.local.kakeibo.expense.coerceDay
 import jp.local.kakeibo.expense.dailyTotals
 import jp.local.kakeibo.expense.monthlyExpenses
 import jp.local.kakeibo.navigation.KakeiboApp
+import jp.local.kakeibo.update.AppUpdateCoordinator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -233,7 +234,7 @@ class MainActivity : ComponentActivity() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
-        setContent { KakeiboTheme { KakeiboApp() } }
+        setContent { KakeiboTheme { AppUpdateCoordinator { KakeiboApp() } } }
     }
 }
 

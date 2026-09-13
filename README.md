@@ -146,6 +146,8 @@ GitHub Actionsの`CI`ワークフローは、`main`へのpushとPull Requestで�
 
 `v*`形式のタグをpushすると`Release`ワークフローがAndroid APKを再検証・ビルドし、`my-kakeibo-<タグ>.apk`をGitHub Releasesへ自動公開します。Androidの同期先URLはGitHub ActionsのRepository Variable `ANDROID_API_BASE_URL`、既存APKと同じ署名鍵のBase64値はActions Secret `ANDROID_DEBUG_KEYSTORE_BASE64`で管理します。
 
+Androidアプリは起動時にGitHub Releasesの最新版を確認します。新しいバージョンがある場合は確認後にAPKをダウンロードし、Android標準のインストール画面を開きます。初回更新時は、端末の「不明なアプリのインストール」画面でこのアプリからのインストールを許可してください。更新確認に失敗しても通常の起動とオフライン利用には影響しません。
+
 ローカルから新しいリリースを開始する例:
 
 ```bash
