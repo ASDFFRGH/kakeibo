@@ -1,8 +1,24 @@
+import java.net.URI
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
+}
+
+val defaultApiBaseUrl = "http://10.0.2.2:8080/api/v1/"
+val apiBaseUrl = providers.gradleProperty("API_BASE_URL").orElse(defaultApiBaseUrl).get()
+val apiBaseUri = runCatching { URI(apiBaseUrl) }.getOrNull()
+require(
+    apiBaseUri != null &&
+        apiBaseUri.scheme in setOf("http", "https") &&
+        !apiBaseUri.host.isNullOrBlank() &&
+        apiBaseUri.rawQuery == null &&
+        apiBaseUri.rawFragment == null &&
+        apiBaseUri.path.endsWith("/api/v1/"),
+) {
+    "API_BASE_URL must be an absolute http(s) URL ending in /api/v1/: $apiBaseUrl"
 }
 
 android {
@@ -12,9 +28,9 @@ android {
         applicationId = "jp.local.kakeibo"
         minSdk = 29
         targetSdk = 35
-        versionCode = 19
-        versionName = "1.19"
-        buildConfigField("String", "API_BASE_URL", "\"${project.findProperty("API_BASE_URL") ?: "http://10.0.2.2:8080/api/v1/"}\"")
+        versionCode = 20
+        versionName = "1.20"
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
     signingConfigs {
         getByName("debug") {

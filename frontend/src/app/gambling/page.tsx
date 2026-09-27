@@ -14,7 +14,6 @@ import {
   ChevronRight,
   Dices,
   BarChart3,
-  Pencil,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -65,6 +64,9 @@ function GamblingPage() {
   const [month, setMonth] = useState(() =>
     resolveMonth(searchParams.get("month"), localToday()),
   );
+  const [selectedDate, setSelectedDate] = useState(() =>
+    searchParams.has("month") ? `${month}-01` : localToday(),
+  );
   const [records, setRecords] = useState<GamblingRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -93,15 +95,31 @@ function GamblingPage() {
   }, [load]);
 
   const totals = useMemo(() => gamblingTotals(records), [records]);
-  const sortedRecords = useMemo(
-    () =>
-      [...records].sort(
-        (left, right) =>
-          right.date.localeCompare(left.date) ||
-          right.updated_at.localeCompare(left.updated_at),
-      ),
-    [records],
+  const selectedRecords = useMemo(
+    () => records.filter((record) => record.date === selectedDate),
+    [records, selectedDate],
   );
+  const dailyTotals = useMemo(() => {
+    const totalsByDate = new Map<string, { stake: number; payout: number }>();
+    records.forEach((record) => {
+      const total = totalsByDate.get(record.date) ?? { stake: 0, payout: 0 };
+      total.stake += record.stake_amount;
+      total.payout += record.payout_amount;
+      totalsByDate.set(record.date, total);
+    });
+    return totalsByDate;
+  }, [records]);
+  const calendarDays = useMemo(() => buildCalendarDays(month), [month]);
+
+  const shift = (amount: number) => {
+    const nextMonth = shiftGamblingMonth(month, amount);
+    const currentDay = Number(selectedDate.slice(8, 10));
+    const nextLastDay = Number(gamblingMonthRange(nextMonth).to.slice(8, 10));
+    setMonth(nextMonth);
+    setSelectedDate(
+      `${nextMonth}-${String(Math.min(currentDay, nextLastDay)).padStart(2, "0")}`,
+    );
+  };
 
   const startAdding = () => {
     setEditing(null);
@@ -177,42 +195,6 @@ function GamblingPage() {
 
       <LedgerNavigation active="gambling" month={month} />
 
-      <section className="gambling-heading">
-        <div>
-          <span>家計簿とは別に管理</span>
-          <h1>ギャンブル収支</h1>
-          <p>1回の遊技・購入ごとに、投資額と回収額を記録します。</p>
-        </div>
-        <div className="gambling-month-navigation">
-          <button
-            type="button"
-            aria-label="前月"
-            onClick={() => setMonth(shiftGamblingMonth(month, -1))}
-          >
-            <ChevronLeft />
-          </button>
-          <label>
-            <CalendarDays size={19} />
-            <span className="sr-only">対象月</span>
-            <input
-              aria-label="対象月"
-              type="month"
-              value={month}
-              onChange={(event) =>
-                event.target.value && setMonth(event.target.value)
-              }
-            />
-          </label>
-          <button
-            type="button"
-            aria-label="翌月"
-            onClick={() => setMonth(shiftGamblingMonth(month, 1))}
-          >
-            <ChevronRight />
-          </button>
-        </div>
-      </section>
-
       {error && (
         <div className="error" role="alert">
           {error}
@@ -224,116 +206,132 @@ function GamblingPage() {
         </div>
       )}
 
-      <section
-        className="gambling-totals"
-        aria-label={`${formatMonth(month)}の集計`}
-      >
-        <article>
-          <span>投資額</span>
-          <strong className="expense-amount">
-            {money.format(totals.stake)}
-          </strong>
-        </article>
-        <article>
-          <span>回収額</span>
-          <strong className="income-amount">
-            {money.format(totals.payout)}
-          </strong>
-        </article>
-        <article className="gambling-balance-card">
-          <span>収支</span>
-          <strong className={balanceClass(totals.balance)}>
-            {signedMoney(totals.balance)}
-          </strong>
-          <small>{totals.count}件</small>
-        </article>
-      </section>
-
-      <section
-        className="gambling-records"
-        aria-labelledby="gambling-records-title"
-      >
-        <div className="gambling-records-title">
-          <div>
-            <span>{formatMonth(month)}</span>
-            <h2 id="gambling-records-title">記録一覧</h2>
-          </div>
-          <small>{totals.count}件</small>
-        </div>
-
-        {loading ? (
-          <div className="gambling-empty">記録を読み込んでいます...</div>
-        ) : sortedRecords.length === 0 ? (
-          <div className="gambling-empty">
-            <Dices size={36} aria-hidden="true" />
-            <strong>この月の記録はありません</strong>
-            <span>
-              遊技や購入が終わったら、投資額と回収額を追加しましょう。
-            </span>
-            <button className="primary" onClick={startAdding}>
-              <Plus size={18} />
-              最初の記録を追加
+      <div className="calendar-dashboard gambling-calendar-dashboard">
+        <div className="calendar-panel">
+          <section className="calendar-toolbar">
+            <button aria-label="前月" onClick={() => shift(-1)}>
+              <ChevronLeft />
             </button>
-          </div>
-        ) : (
-          <div className="gambling-record-list">
-            <div className="gambling-record-head" aria-hidden="true">
-              <span>日付・種目</span>
-              <span>投資額</span>
-              <span>回収額</span>
-              <span>収支</span>
-              <span>操作</span>
+            <strong>
+              <CalendarDays size={23} />
+              {formatMonth(month)}
+            </strong>
+            <button aria-label="翌月" onClick={() => shift(1)}>
+              <ChevronRight />
+            </button>
+          </section>
+          <section
+            className="calendar-card"
+            aria-label={`${formatMonth(month)}のカレンダー`}
+          >
+            <div className="weekday-row" aria-hidden="true">
+              {["日", "月", "火", "水", "木", "金", "土"].map((day, index) => (
+                <span
+                  className={
+                    index === 0 ? "sunday" : index === 6 ? "saturday" : ""
+                  }
+                  key={day}
+                >
+                  {day}
+                </span>
+              ))}
             </div>
-            {sortedRecords.map((record) => {
-              const balance = record.payout_amount - record.stake_amount;
-              return (
-                <article className="gambling-record-row" key={record.uuid}>
-                  <div className="gambling-record-detail">
-                    <time dateTime={record.date}>
-                      {formatDate(record.date)}
-                    </time>
-                    <strong>{record.game_type}</strong>
-                    {record.memo && <small>{record.memo}</small>}
-                  </div>
-                  <span className="gambling-amount gambling-stake">
-                    <small>投資</small>
-                    {money.format(record.stake_amount)}
-                  </span>
-                  <span className="gambling-amount gambling-payout">
-                    <small>回収</small>
-                    {money.format(record.payout_amount)}
-                  </span>
-                  <strong
-                    className={`gambling-row-balance ${balanceClass(balance)}`}
+            <div className="calendar-grid">
+              {calendarDays.map((date, index) =>
+                date ? (
+                  <button
+                    className={date === selectedDate ? "selected" : ""}
+                    key={date}
+                    onClick={() => setSelectedDate(date)}
                   >
-                    <small>収支</small>
-                    {signedMoney(balance)}
-                  </strong>
-                  <div className="gambling-row-actions">
+                    <span>{Number(date.slice(8, 10))}</span>
+                    {dailyTotals.has(date) && (
+                      <span className="gambling-calendar-day-totals">
+                        <small className="expense-amount">
+                          投 {money.format(dailyTotals.get(date)?.stake ?? 0)}
+                        </small>
+                        <small className="income-amount">
+                          回 {money.format(dailyTotals.get(date)?.payout ?? 0)}
+                        </small>
+                      </span>
+                    )}
+                  </button>
+                ) : (
+                  <span className="calendar-blank" key={`blank-${index}`} />
+                ),
+              )}
+            </div>
+          </section>
+          <div className="calendar-balance">
+            <span>
+              <small>投資額</small>
+              <strong className="expense-amount">
+                {money.format(totals.stake)}
+              </strong>
+            </span>
+            <span>
+              <small>回収額</small>
+              <strong className="income-amount">
+                {money.format(totals.payout)}
+              </strong>
+            </span>
+            <span>
+              <small>収支（{totals.count}件）</small>
+              <strong className={balanceClass(totals.balance)}>
+                {signedMoney(totals.balance)}
+              </strong>
+            </span>
+          </div>
+        </div>
+        <section
+          className="selected-day gambling-selected-day"
+          aria-labelledby="gambling-selected-date"
+        >
+          <div className="selected-day-heading">
+            <span>選択日の記録</span>
+            <h2 id="gambling-selected-date">{formatDate(selectedDate)}</h2>
+          </div>
+          {loading ? (
+            <div className="day-empty">読み込み中...</div>
+          ) : selectedRecords.length === 0 ? (
+            <div className="day-empty">この日の記録はありません</div>
+          ) : (
+            <div className="transaction-cards">
+              {selectedRecords.map((record) => {
+                const balance = record.payout_amount - record.stake_amount;
+                return (
+                  <article
+                    className="transaction-card gambling-transaction-card"
+                    key={record.uuid}
+                  >
                     <button
-                      type="button"
-                      aria-label={`${formatDate(record.date)}の${record.game_type}を編集`}
-                      title="編集"
+                      className="transaction-card-main"
                       onClick={() => startEditing(record)}
                     >
-                      <Pencil size={17} />
+                      <span>
+                        <strong>{record.game_type}</strong>
+                        {record.memo && <small>{record.memo}</small>}
+                      </span>
+                      <b className={balanceClass(balance)}>
+                        {signedMoney(balance)}
+                      </b>
+                      <ChevronRight />
                     </button>
                     <button
-                      className="danger"
-                      type="button"
+                      className="transaction-delete"
                       aria-label={`${formatDate(record.date)}の${record.game_type}を削除`}
                       title="削除"
                       onClick={() => void remove(record)}
                     >
                       <Trash2 size={17} />
                     </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
 
       <button className="gambling-fab" onClick={startAdding}>
         <Plus />
@@ -343,14 +341,16 @@ function GamblingPage() {
       {dialog === "record" && (
         <GamblingRecordDialog
           month={month}
+          selectedDate={selectedDate}
           record={editing}
           close={() => {
             setDialog(null);
             setEditing(null);
           }}
-          saved={async () => {
+          saved={async (savedDate) => {
             setDialog(null);
             setEditing(null);
+            setSelectedDate(savedDate);
             setMessage(
               editing ? "記録を更新しました。" : "記録を追加しました。",
             );
@@ -373,16 +373,18 @@ function GamblingPage() {
 
 function GamblingRecordDialog({
   month,
+  selectedDate,
   record,
   close,
   saved,
 }: {
   month: string;
+  selectedDate: string;
   record: GamblingRecord | null;
   close: () => void;
-  saved: () => Promise<void>;
+  saved: (date: string) => Promise<void>;
 }) {
-  const [date, setDate] = useState(record?.date ?? defaultDateForMonth(month));
+  const [date, setDate] = useState(record?.date ?? selectedDate);
   const [gameType, setGameType] = useState(record?.game_type ?? "");
   const [stakeAmount, setStakeAmount] = useState(
     record?.stake_amount.toString() ?? "0",
@@ -430,7 +432,7 @@ function GamblingRecordDialog({
         },
         record !== null,
       );
-      await saved();
+      await saved(date);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "保存に失敗しました");
     } finally {
@@ -684,14 +686,22 @@ function GamblingTrashDialog({
   );
 }
 
-function defaultDateForMonth(month: string) {
-  const today = localToday();
-  return today.startsWith(`${month}-`) ? today : `${month}-01`;
-}
-
 function formatMonth(month: string) {
   const [year, monthNumber] = month.split("-");
   return `${year}年${Number(monthNumber)}月`;
+}
+
+function buildCalendarDays(month: string): (string | null)[] {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const firstWeekday = new Date(year, monthNumber - 1, 1).getDay();
+  const lastDay = Number(gamblingMonthRange(month).to.slice(8, 10));
+  return [
+    ...Array<null>(firstWeekday).fill(null),
+    ...Array.from(
+      { length: lastDay },
+      (_, index) => `${month}-${String(index + 1).padStart(2, "0")}`,
+    ),
+  ];
 }
 
 function formatDate(date: string) {

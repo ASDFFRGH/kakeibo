@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.Casino
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -22,11 +23,13 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import jp.local.kakeibo.KakeiboScreen
+import jp.local.kakeibo.CombinedSummaryRoute
 import jp.local.kakeibo.gambling.GamblingRoute
 
 enum class AppTab {
     HOUSEHOLD,
     GAMBLING,
+    COMBINED_SUMMARY,
 }
 
 @Composable
@@ -36,7 +39,7 @@ fun KakeiboApp() {
     val selectedTab = AppTab.valueOf(selectedTabName)
     val stateHolder = rememberSaveableStateHolder()
 
-    BackHandler(enabled = selectedTab == AppTab.GAMBLING && !fullscreen) {
+    BackHandler(enabled = selectedTab != AppTab.HOUSEHOLD && !fullscreen) {
         selectedTabName = AppTab.HOUSEHOLD.name
     }
 
@@ -63,6 +66,15 @@ fun KakeiboApp() {
                         icon = { Icon(Icons.Outlined.Casino, contentDescription = null) },
                         label = { Text("ギャンブル") },
                     )
+                    NavigationBarItem(
+                        selected = selectedTab == AppTab.COMBINED_SUMMARY,
+                        onClick = {
+                            selectedTabName = AppTab.COMBINED_SUMMARY.name
+                            fullscreen = false
+                        },
+                        icon = { Icon(Icons.Outlined.Assessment, contentDescription = null) },
+                        label = { Text("全体サマリー") },
+                    )
                 }
             }
         },
@@ -77,6 +89,7 @@ fun KakeiboApp() {
                 when (selectedTab) {
                     AppTab.HOUSEHOLD -> KakeiboScreen(onFullscreenChange = { fullscreen = it })
                     AppTab.GAMBLING -> GamblingRoute(onFullscreenChange = { fullscreen = it })
+                    AppTab.COMBINED_SUMMARY -> CombinedSummaryRoute()
                 }
             }
         }

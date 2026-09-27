@@ -31,6 +31,12 @@ docker compose up --build -d
 docker compose logs -f
 ```
 
+アプリやソースコードを更新した後は、古いBackendコンテナを再利用しないよう次のコマンドで更新してください。Dockerイメージを再構築し、家計簿とギャンブルの両同期APIが利用できることまで自動確認します。PostgreSQLのデータは保持されます。
+
+```bash
+./scripts/update-local-stack.sh
+```
+
 停止する場合:
 
 ```bash
@@ -130,7 +136,7 @@ Web画面で変更したデータも次回のAndroid同期で端末へ反映さ�
 - PCのファイアウォールやネットワーク設定でTCP 8080への通信が許可されている
 - `API_BASE_URL`の末尾に`/`が付いている
 
-同期に失敗した場合、Android画面には通信、HTTP応答、応答データ、端末内データベースなどの原因が表示されます。より詳しい例外情報は、Logcatでタグ`KakeiboSync`を絞り込むと確認できます。
+同期に失敗した場合、Android画面には通信、HTTP応答、応答データ、端末内データベースなどの原因が表示されます。HTTP 404の場合はPC側のBackendが古い可能性があるため、`./scripts/update-local-stack.sh`を実行してください。より詳しい例外情報は、Logcatでタグ`KakeiboSync`を絞り込むと確認できます。
 
 AndroidとWebの「ゴミ箱」では、論理削除した支出とカテゴリを確認して復元できます。Androidでの復元はオフラインでも利用でき、次回同期時にサーバーへ反映されます。削除済みカテゴリに属する支出を復元した場合は、参照先カテゴリも同時に復元されます。
 
@@ -144,7 +150,7 @@ GitHub Actionsの`CI`ワークフローは、`main`へのpushとPull Requestで�
 - Webのテスト、型チェック、フォーマットチェック、本番ビルド
 - Androidの単体テスト、lint、Debug APKビルド
 
-`v*`形式のタグをpushすると`Release`ワークフローがAndroid APKを再検証・ビルドし、`my-kakeibo-<タグ>.apk`をGitHub Releasesへ自動公開します。Androidの同期先URLはGitHub ActionsのRepository Variable `ANDROID_API_BASE_URL`、既存APKと同じ署名鍵のBase64値はActions Secret `ANDROID_DEBUG_KEYSTORE_BASE64`で管理します。
+`v*`形式のタグをpushすると`Release`ワークフローがAndroid APKを再検証・ビルドし、`my-kakeibo-<タグ>.apk`をGitHub Releasesへ自動公開します。リリース前にBackend側の家計簿・ギャンブル同期経路も検証します。Androidの同期先URLはGitHub ActionsのRepository Variable `ANDROID_API_BASE_URL`、既存APKと同じ署名鍵のBase64値はActions Secret `ANDROID_DEBUG_KEYSTORE_BASE64`で管理し、絶対URLかつ`/api/v1/`で終わる形式だけを許可します。
 
 Androidアプリは起動時にGitHub Releasesの最新版を確認します。新しいバージョンがある場合は確認後にAPKをダウンロードし、Android標準のインストール画面を開きます。初回更新時は、端末の「不明なアプリのインストール」画面でこのアプリからのインストールを許可してください。更新確認に失敗しても通常の起動とオフライン利用には影響しません。
 

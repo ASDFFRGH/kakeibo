@@ -21,13 +21,26 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
       - name: Validate release configuration
         env:
           API_BASE_URL: ${{ vars.ANDROID_API_BASE_URL }}
           DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
-        run: test -n "$API_BASE_URL" && test -n "$DEBUG_KEYSTORE_BASE64"
+        run: |
+          test -n "$DEBUG_KEYSTORE_BASE64"
+          if [[ ! "$API_BASE_URL" =~ ^https?://[^/]+(/[^?#]*)?/api/v1/$ ]]; then
+            echo "ANDROID_API_BASE_URL must be an absolute http(s) URL ending in /api/v1/" >&2
+            exit 1
+          fi
+      - name: Verify backend sync routing contract
+        working-directory: backend
+        run: go test ./internal/api -run 'TestSyncRoutesAreRegistered$'
       - name: Restore Android signing key
         env:
           DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}

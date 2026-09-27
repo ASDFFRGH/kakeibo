@@ -1,11 +1,11 @@
-import { Dices, WalletCards } from "lucide-react";
+import { BarChart3, Dices, WalletCards } from "lucide-react";
 import Link from "next/link";
 
 export function LedgerNavigation({
   active,
   month,
 }: {
-  active: "household" | "gambling";
+  active: "household" | "gambling" | "combined";
   month?: string;
 }) {
   const query = month ? `?month=${encodeURIComponent(month)}` : "";
@@ -27,6 +27,14 @@ export function LedgerNavigation({
       >
         <Dices size={18} />
         ギャンブル
+      </Link>
+      <Link
+        className={active === "combined" ? "active" : ""}
+        aria-current={active === "combined" ? "page" : undefined}
+        href={`/combined-summary${query}`}
+      >
+        <BarChart3 size={18} />
+        全体サマリー
       </Link>
     </nav>
   );

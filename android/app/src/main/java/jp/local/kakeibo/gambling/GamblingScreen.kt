@@ -7,12 +7,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -76,9 +78,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import jp.local.kakeibo.data.GamblingRecordEntity
+import jp.local.kakeibo.expense.calendarDates
+import jp.local.kakeibo.expense.coerceDay
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -97,7 +105,11 @@ fun GamblingRoute(
     var trashOpen by rememberSaveable { mutableStateOf(false) }
     var summaryOpen by rememberSaveable { mutableStateOf(false) }
     var selectedMonthText by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
+    var selectedDateText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     val selectedMonth = YearMonth.parse(selectedMonthText)
+    val selectedDate = selectedMonth.coerceDay(
+        runCatching { LocalDate.parse(selectedDateText).dayOfMonth }.getOrDefault(1),
+    )
     val snackbar = remember { SnackbarHostState() }
     val fullscreen = editorOpen || editingRecord != null
 
@@ -119,10 +131,12 @@ fun GamblingRoute(
         BackHandler(onBack = closeEditor)
         GamblingEditorPage(
             current = editingRecord,
-            initialDate = defaultDateFor(selectedMonth),
+            initialDate = selectedDate,
             onClose = closeEditor,
             onSave = { current, date, stake, payout, gameType, memo ->
                 viewModel.save(current, date, stake, payout, gameType, memo)
+                selectedMonthText = YearMonth.from(date).toString()
+                selectedDateText = date.toString()
                 closeEditor()
             },
             onDelete = { record ->
@@ -213,6 +227,8 @@ fun GamblingRoute(
                 records = state.records,
                 selectedMonth = selectedMonth,
                 onMonthChange = { selectedMonthText = it.toString() },
+                selectedDate = selectedDate,
+                onDateChange = { selectedDateText = it.toString() },
                 onEdit = { editingRecord = it },
                 modifier = Modifier.padding(padding),
             )
@@ -225,6 +241,8 @@ private fun GamblingLedger(
     records: List<GamblingRecordEntity>,
     selectedMonth: YearMonth,
     onMonthChange: (YearMonth) -> Unit,
+    selectedDate: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
     onEdit: (GamblingRecordEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -234,61 +252,208 @@ private fun GamblingLedger(
                 runCatching { YearMonth.from(LocalDate.parse(record.date)) }.getOrNull() == selectedMonth
             }
         }
-    val totals = remember(monthlyRecords) { calculateGamblingTotals(monthlyRecords) }
+    val selectedRecords =
+        remember(monthlyRecords, selectedDate) {
+            monthlyRecords.filter { it.date == selectedDate.toString() }
+        }
 
-    Box(
-        modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth().widthIn(max = 760.dp),
-            contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 112.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         ) {
-            item {
-                MonthSelector(selectedMonth = selectedMonth, onMonthChange = onMonthChange)
-            }
-            item {
-                GamblingTotalsCard(
-                    stake = totals.totalStake,
-                    payout = totals.totalPayout,
-                    balance = totals.balance,
-                    count = monthlyRecords.size,
-                )
-            }
-            if (monthlyRecords.isEmpty()) {
-                item {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Column(
-                            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Icon(
-                                Icons.Outlined.Casino,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(36.dp),
-                            )
-                            Text("この月の記録はありません", fontWeight = FontWeight.Bold)
-                            Text(
-                                "投資額と回収額を記録すると、月の収支を確認できます。",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
+            MonthSelector(selectedMonth = selectedMonth, onMonthChange = onMonthChange)
+            GamblingMonthCalendar(
+                month = selectedMonth,
+                selectedDate = selectedDate,
+                records = monthlyRecords,
+                onDateClick = onDateChange,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            GamblingMonthlyBalance(monthlyRecords)
+        }
+        Text(
+            selectedDate.format(DateTimeFormatter.ofPattern("M月d日（E）")),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.secondaryContainer)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+        )
+        if (selectedRecords.isEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(12.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                    Text(
+                        "この日の収支はありません\n収支を追加ボタンから登録できます",
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(24.dp),
+                    )
                 }
-            } else {
-                items(monthlyRecords, key = { it.uuid }) { record ->
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(start = 12.dp, top = 8.dp, end = 12.dp, bottom = 96.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(selectedRecords, key = { it.uuid }) { record ->
                     GamblingRecordCard(record = record, onEdit = { onEdit(record) })
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun GamblingMonthCalendar(
+    month: YearMonth,
+    selectedDate: LocalDate,
+    records: List<GamblingRecordEntity>,
+    onDateClick: (LocalDate) -> Unit,
+) {
+    val totals = remember(records) { gamblingDailyTotals(records) }
+    val dates = remember(month) { calendarDates(month) }
+    val weekDays = listOf("日", "月", "火", "水", "木", "金", "土")
+    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+        Row(Modifier.fillMaxWidth()) {
+            weekDays.forEachIndexed { index, label ->
+                Text(
+                    label,
+                    textAlign = TextAlign.Center,
+                    color = when (index) {
+                        0 -> MaterialTheme.colorScheme.error
+                        6 -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.weight(1f).padding(vertical = 6.dp),
+                )
+            }
+        }
+        dates.chunked(7).forEach { week ->
+            Row(Modifier.fillMaxWidth()) {
+                week.forEach { date ->
+                    if (date == null) {
+                        Spacer(Modifier.weight(1f).height(64.dp))
+                    } else {
+                        val dayTotals = totals[date]
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 64.dp)
+                                .padding(1.dp)
+                                .then(
+                                    if (date == selectedDate) {
+                                        Modifier.background(
+                                            MaterialTheme.colorScheme.primaryContainer,
+                                            RoundedCornerShape(8.dp),
+                                        )
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                                .clickable { onDateClick(date) }
+                                .padding(horizontal = 3.dp, vertical = 2.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                date.dayOfMonth.toString(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (date == selectedDate) FontWeight.Bold else FontWeight.Normal,
+                            )
+                            dayTotals?.stake?.takeIf { it > 0 }?.let {
+                                GamblingCalendarAmount("-¥%,d".format(it), MaterialTheme.colorScheme.error)
+                            }
+                            dayTotals?.payout?.takeIf { it > 0 }?.let {
+                                GamblingCalendarAmount("+¥%,d".format(it), MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private data class GamblingDayTotals(val stake: Long = 0, val payout: Long = 0)
+
+private fun gamblingDailyTotals(records: List<GamblingRecordEntity>): Map<LocalDate, GamblingDayTotals> =
+    records
+        .mapNotNull { record -> runCatching { LocalDate.parse(record.date) to record }.getOrNull() }
+        .groupBy({ it.first }, { it.second })
+        .mapValues { (_, recordsForDay) ->
+            GamblingDayTotals(
+                stake = recordsForDay.sumOf { it.stakeAmount },
+                payout = recordsForDay.sumOf { it.payoutAmount },
+            )
+        }
+
+@Composable
+private fun GamblingCalendarAmount(text: String, color: Color) {
+    val textMeasurer = rememberTextMeasurer()
+    val baseStyle = MaterialTheme.typography.labelSmall
+
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val availableWidth = constraints.maxWidth
+        val fittedFontSize = remember(text, availableWidth, baseStyle) {
+            val preferredSize = baseStyle.fontSize.value
+            val measuredWidth =
+                textMeasurer.measure(
+                    text = text,
+                    style = baseStyle,
+                    maxLines = 1,
+                    softWrap = false,
+                ).size.width
+
+            if (availableWidth <= 0 || measuredWidth <= availableWidth) {
+                baseStyle.fontSize
+            } else {
+                (preferredSize * availableWidth / measuredWidth * 0.98f).sp
+            }
+        }
+
+        Text(
+            text = text,
+            color = color,
+            style = baseStyle.copy(fontSize = fittedFontSize),
+            maxLines = 1,
+            softWrap = false,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun GamblingMonthlyBalance(records: List<GamblingRecordEntity>) {
+    val totals = remember(records) { calculateGamblingTotals(records) }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.secondaryContainer)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceAround,
+    ) {
+        GamblingBalanceItem("投資", formatYen(totals.totalStake), MaterialTheme.colorScheme.error)
+        GamblingBalanceItem("回収", formatYen(totals.totalPayout), MaterialTheme.colorScheme.primary)
+        GamblingBalanceItem("収支", signedYen(totals.balance), balanceColor(totals.balance))
+    }
+}
+
+@Composable
+private fun GamblingBalanceItem(label: String, amount: String, color: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(amount, color = color, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -864,15 +1029,6 @@ private fun GamblingEditorPage(
 @Composable
 private fun balanceColor(balance: Long): Color =
     if (balance >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-
-private fun defaultDateFor(month: YearMonth): LocalDate {
-    val today = LocalDate.now()
-    return if (YearMonth.from(today) == month) {
-        today
-    } else {
-        month.atDay(today.dayOfMonth.coerceAtMost(month.lengthOfMonth()))
-    }
-}
 
 private fun formatDate(value: String): String =
     runCatching {

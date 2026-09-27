@@ -40,6 +40,10 @@ internal fun httpFailureMessage(
     statusCode: Int,
     responseBody: String?,
 ): String {
+    if (statusCode == 404) {
+        return "同期先に必要なAPIが見つかりません（HTTP 404）。PC側のBackendを最新版に更新してください"
+    }
+
     val serverMessage =
         responseBody
             ?.takeIf { it.isNotBlank() }

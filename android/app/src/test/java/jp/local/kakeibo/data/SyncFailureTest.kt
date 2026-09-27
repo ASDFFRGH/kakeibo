@@ -47,4 +47,14 @@ class SyncFailureTest {
 
         assertEquals("サーバーがエラーを返しました（HTTP 500）", message)
     }
+
+    @Test
+    fun `not found explains that backend must be updated`() {
+        val message = httpFailureMessage(404, "404 page not found")
+
+        assertEquals(
+            "同期先に必要なAPIが見つかりません（HTTP 404）。PC側のBackendを最新版に更新してください",
+            message,
+        )
+    }
 }

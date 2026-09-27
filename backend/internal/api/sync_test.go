@@ -1,12 +1,29 @@
 package api
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"kakeibo/backend/internal/model"
 )
+
+func TestSyncRoutesAreRegistered(t *testing.T) {
+	handler := New(nil, "")
+	for _, path := range []string{"/api/v1/sync", "/api/v1/gambling/sync"} {
+		t.Run(path, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, path, strings.NewReader("{"))
+			recorder := httptest.NewRecorder()
+
+			handler.ServeHTTP(recorder, request)
+
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("POST %s status = %d, want %d; route may be missing", path, recorder.Code, http.StatusBadRequest)
+			}
+		})
+	}
+}
 
 func TestDecodeSyncRequestAcceptsCategoryType(t *testing.T) {
 	request := httptest.NewRequest(
