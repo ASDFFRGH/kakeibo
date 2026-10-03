@@ -28,8 +28,8 @@ android {
         applicationId = "jp.local.kakeibo"
         minSdk = 29
         targetSdk = 35
-        versionCode = 20
-        versionName = "1.20"
+        versionCode = 21
+        versionName = "1.21"
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
     signingConfigs {

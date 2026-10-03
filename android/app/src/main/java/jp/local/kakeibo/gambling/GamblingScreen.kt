@@ -5,6 +5,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -72,6 +74,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -90,8 +93,12 @@ import jp.local.kakeibo.expense.coerceDay
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 private val gameTypeSuggestions = listOf("パチンコ", "スロット", "競馬", "競艇", "競輪", "FX", "株", "その他")
+private const val GAMBLING_MONTH_PAGER_PAGE_COUNT = 2_401
+private const val GAMBLING_MONTH_PAGER_INITIAL_PAGE = GAMBLING_MONTH_PAGER_PAGE_COUNT / 2
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -246,10 +253,71 @@ private fun GamblingLedger(
     onEdit: (GamblingRecordEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val pagerAnchorMonthText by rememberSaveable { mutableStateOf(selectedMonth.toString()) }
+    val pagerAnchorMonth = remember(pagerAnchorMonthText) { YearMonth.parse(pagerAnchorMonthText) }
+    val pagerState =
+        rememberPagerState(
+            initialPage = GAMBLING_MONTH_PAGER_INITIAL_PAGE,
+            pageCount = { GAMBLING_MONTH_PAGER_PAGE_COUNT },
+        )
+
+    LaunchedEffect(pagerState, pagerAnchorMonth) {
+        snapshotFlow { pagerState.settledPage }
+            .distinctUntilChanged()
+            .collect { page ->
+                onMonthChange(
+                    pagerAnchorMonth.plusMonths(
+                        (page - GAMBLING_MONTH_PAGER_INITIAL_PAGE).toLong(),
+                    ),
+                )
+            }
+    }
+    LaunchedEffect(selectedMonth, pagerAnchorMonth) {
+        val monthOffset = ChronoUnit.MONTHS.between(pagerAnchorMonth, selectedMonth)
+        val targetPage = GAMBLING_MONTH_PAGER_INITIAL_PAGE.toLong() + monthOffset
+        if (
+            targetPage in 0 until GAMBLING_MONTH_PAGER_PAGE_COUNT.toLong() &&
+            pagerState.currentPage != targetPage.toInt()
+        ) {
+            pagerState.animateScrollToPage(targetPage.toInt())
+        }
+    }
+
+    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Column(Modifier.background(MaterialTheme.colorScheme.surface)) {
+            MonthSelector(selectedMonth = selectedMonth, onMonthChange = onMonthChange)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            key = { it },
+        ) { page ->
+            val pageMonth =
+                pagerAnchorMonth.plusMonths((page - GAMBLING_MONTH_PAGER_INITIAL_PAGE).toLong())
+            GamblingMonthPage(
+                records = records,
+                month = pageMonth,
+                selectedDate = pageMonth.coerceDay(selectedDate.dayOfMonth),
+                onDateChange = onDateChange,
+                onEdit = onEdit,
+            )
+        }
+    }
+}
+
+@Composable
+private fun GamblingMonthPage(
+    records: List<GamblingRecordEntity>,
+    month: YearMonth,
+    selectedDate: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+    onEdit: (GamblingRecordEntity) -> Unit,
+) {
     val monthlyRecords =
-        remember(records, selectedMonth) {
+        remember(records, month) {
             records.filter { record ->
-                runCatching { YearMonth.from(LocalDate.parse(record.date)) }.getOrNull() == selectedMonth
+                runCatching { YearMonth.from(LocalDate.parse(record.date)) }.getOrNull() == month
             }
         }
     val selectedRecords =
@@ -257,16 +325,15 @@ private fun GamblingLedger(
             monthlyRecords.filter { it.date == selectedDate.toString() }
         }
 
-    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Card(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         ) {
-            MonthSelector(selectedMonth = selectedMonth, onMonthChange = onMonthChange)
             GamblingMonthCalendar(
-                month = selectedMonth,
+                month = month,
                 selectedDate = selectedDate,
                 records = monthlyRecords,
                 onDateClick = onDateChange,
@@ -345,6 +412,7 @@ private fun GamblingMonthCalendar(
                     if (date == null) {
                         Spacer(Modifier.weight(1f).height(64.dp))
                     } else {
+                        val isSelected = date == selectedDate
                         val dayTotals = totals[date]
                         Column(
                             modifier = Modifier
@@ -352,7 +420,7 @@ private fun GamblingMonthCalendar(
                                 .heightIn(min = 64.dp)
                                 .padding(1.dp)
                                 .then(
-                                    if (date == selectedDate) {
+                                    if (isSelected) {
                                         Modifier.background(
                                             MaterialTheme.colorScheme.primaryContainer,
                                             RoundedCornerShape(8.dp),
@@ -368,7 +436,13 @@ private fun GamblingMonthCalendar(
                             Text(
                                 date.dayOfMonth.toString(),
                                 style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = if (date == selectedDate) FontWeight.Bold else FontWeight.Normal,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color =
+                                    if (isSelected) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onTertiaryContainer
+                                    },
                             )
                             dayTotals?.stake?.takeIf { it > 0 }?.let {
                                 GamblingCalendarAmount("-¥%,d".format(it), MaterialTheme.colorScheme.error)
